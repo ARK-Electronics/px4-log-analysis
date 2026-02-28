@@ -1,0 +1,4 @@
+tmp/
+*.ulg
+__pycache__/
+*.pyc
