@@ -480,15 +480,14 @@ def plot_altitude_compare(baro_error, ekf_data, baro_data, phases):
 def plot_error_with_thrust(baro_error, thrust_data, corr, vz_data,
                            phases, hover_start, hover_end):
     """Plot baro error timeseries with thrust overlay and vertical velocity."""
-    fig, axes = plt.subplots(3, 1, figsize=(14, 10), sharex=True,
-                              gridspec_kw={"height_ratios": [3, 2, 2]})
+    fig, axes = plt.subplots(2, 1, figsize=(14, 8), sharex=True)
     fig.suptitle("Baro Error & Thrust Pressurization", fontsize=13,
                  fontweight="bold")
 
     t = baro_error["time_s"]
     err = baro_error["error"]
 
-    # Panel 1: baro error with scaled upward thrust overlay
+    # Panel 1: baro error with scaled thrust and Vz overlays
     ax = axes[0]
     ax.plot(t, err, color="tab:red", linewidth=0.8, label="Baro error")
     if "thrust_time_s" in thrust_data:
@@ -501,31 +500,22 @@ def plot_error_with_thrust(baro_error, thrust_data, corr, vz_data,
         ax.plot(thrust_data["thrust_time_s"], thr_scaled,
                 color="tab:orange", linewidth=0.8, alpha=0.7,
                 label=f"Upward thrust (scaled), |r|={abs(r_val):.2f}")
+    if vz_data and "vz" in vz_data:
+        vz = vz_data["vz"]
+        vz_min, vz_max = np.min(vz), np.max(vz)
+        vz_scaled = (vz - vz_min) / (vz_max - vz_min + 1e-10) \
+                    * (err_max - err_min) + err_min
+        ax.plot(vz_data["time_s"], vz_scaled, color="tab:blue",
+                linewidth=0.8, alpha=0.6,
+                label="Vertical vel (scaled)")
     ax.axvspan(hover_start, hover_end, alpha=0.08, color="blue",
                label="Hover segment")
     ax.set_ylabel("Baro Error [m]")
     ax.legend(fontsize=9)
     ax.grid(True, alpha=0.3)
 
-    # Panel 2: vertical velocity (climb/descend context)
+    # Panel 2: detrended error vs detrended thrust (hover only)
     ax = axes[1]
-    if vz_data and "vz" in vz_data:
-        ax.plot(vz_data["time_s"], vz_data["vz"], color="tab:blue",
-                linewidth=0.8, label=vz_data["source"])
-        ax.axhline(0, color="k", linewidth=0.5, linestyle="--")
-        ax.fill_between(vz_data["time_s"], 0, vz_data["vz"],
-                         where=vz_data["vz"] > 0, alpha=0.15,
-                         color="tab:blue", label="Climbing")
-        ax.fill_between(vz_data["time_s"], 0, vz_data["vz"],
-                         where=vz_data["vz"] < 0, alpha=0.15,
-                         color="tab:red", label="Descending")
-    ax.axvspan(hover_start, hover_end, alpha=0.08, color="blue")
-    ax.set_ylabel("Vertical Vel [m/s]")
-    ax.legend(fontsize=9)
-    ax.grid(True, alpha=0.3)
-
-    # Panel 3: detrended error vs detrended thrust (hover only)
-    ax = axes[2]
     if "hover_error" in corr and "thrust_interp_hover" in corr:
         err_dt = corr["hover_error"] - np.mean(corr["hover_error"])
         thr_up = -corr["thrust_interp_hover"]
