@@ -365,7 +365,7 @@ def compute_spectrogram(data, sample_rate_hz, nperseg=2048):
 # Plotting
 # ---------------------------------------------------------------------------
 
-def plot_psd(psd_data, sample_rate_hz, peaks_by_axis, motor_freq_hz, params, output_path):
+def plot_psd(psd_data, sample_rate_hz, peaks_by_axis, motor_freq_hz, params):
     """
     Plot PSD for all 3 axes.
 
@@ -442,13 +442,11 @@ def plot_psd(psd_data, sample_rate_hz, peaks_by_axis, motor_freq_hz, params, out
                             xytext=(-5, 2), textcoords="offset points")
 
     plt.tight_layout()
-    fig.savefig(output_path, dpi=150)
-    print(f"  Saved: {output_path}")
     return fig
 
 
 def plot_spectrogram(spec_data, motor_times_s, motor_freq_hz_arr, fifo_t_start_s,
-                     vib_metrics, phases, params, output_path):
+                     vib_metrics, phases, params):
     """
     Plot Z-axis spectrogram with motor RPM overlay, filter bands, and vibration metric.
     """
@@ -463,7 +461,7 @@ def plot_spectrogram(spec_data, motor_times_s, motor_freq_hz_arr, fifo_t_start_s
     Sxx_db = 10 * np.log10(Sxx + 1e-30)
     vmin, vmax = np.percentile(Sxx_db, [5, 99])
     ax.pcolormesh(times + fifo_t_start_s, freqs, Sxx_db, vmin=vmin, vmax=vmax,
-                  shading="gouraud", cmap="inferno")
+                  shading="gouraud", cmap="inferno", rasterized=True)
     ax.set_ylabel("Frequency (Hz)")
     ax.set_ylim(0, min(1500, freqs[-1]))
 
@@ -543,8 +541,6 @@ def plot_spectrogram(spec_data, motor_times_s, motor_freq_hz_arr, fifo_t_start_s
     ax.set_xlabel("Time (s)")
 
     plt.tight_layout()
-    fig.savefig(output_path, dpi=150)
-    print(f"  Saved: {output_path}")
     return fig
 
 
@@ -557,7 +553,7 @@ def _highpass(signal, timestamps, cutoff_period_s=5.0):
     return signal - low_freq, low_freq
 
 
-def plot_z_velocity(z_vel_data, phases, output_path):
+def plot_z_velocity(z_vel_data, phases):
     """Plot EKF Z velocity vs range sensor derivative with detrended comparison."""
     if "ekf_vz" not in z_vel_data or "range_vz" not in z_vel_data:
         print("  Skipping Z velocity plot (missing EKF or range sensor data)")
@@ -630,12 +626,10 @@ def plot_z_velocity(z_vel_data, phases, output_path):
     ax.grid(True, alpha=0.3)
 
     plt.tight_layout()
-    fig.savefig(output_path, dpi=150)
-    print(f"  Saved: {output_path}")
     return fig, {"dynamic_rms": dynamic_rms, "bias_rms": bias_rms}
 
 
-def plot_vibration_summary(vib_metrics, esc_data, phases, params, output_path):
+def plot_vibration_summary(vib_metrics, esc_data, phases, params):
     """Overview plot: vibration metrics + ESC RPM + key params."""
     fig, axes = plt.subplots(2, 1, figsize=(14, 6), sharex=True)
     fig.suptitle("Vibration & ESC Overview", fontsize=14)
@@ -674,8 +668,6 @@ def plot_vibration_summary(vib_metrics, esc_data, phases, params, output_path):
              bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5))
 
     plt.tight_layout()
-    fig.savefig(output_path, dpi=150)
-    print(f"  Saved: {output_path}")
     return fig
 
 
@@ -995,8 +987,7 @@ def main():
     print("\nGenerating plots...")
 
     fig_vibsummary = plot_vibration_summary(
-        vib_metrics, (esc_ts, rpm_list), phases, params,
-        os.path.join(output_dir, "vibration_summary.png"))
+        vib_metrics, (esc_ts, rpm_list), phases, params)
 
     fig_spectrogram = None
     if fifo_data is not None:
@@ -1011,19 +1002,17 @@ def main():
             spec_data = (times, freqs, Sxx)
             fig_spectrogram = plot_spectrogram(
                 spec_data, esc_ts, motor_freq_hz_arr,
-                fifo_ti["actual_start_s"], vib_metrics, phases, params,
-                os.path.join(output_dir, "accel_spectrogram.png"))
+                fifo_ti["actual_start_s"], vib_metrics, phases, params)
 
     fig_psd = None
     if psd_data:
         fig_psd = plot_psd(psd_data, sample_rate_hz, psd_peaks, motor_freq_hz,
-                           params, os.path.join(output_dir, "accel_psd.png"))
+                           params)
 
     z_vel_rms = None
     fig_zvel = None
     if "ekf_vz" in z_vel_data and "range_vz" in z_vel_data:
-        fig_zvel, z_vel_rms = plot_z_velocity(
-            z_vel_data, phases, os.path.join(output_dir, "z_velocity.png"))
+        fig_zvel, z_vel_rms = plot_z_velocity(z_vel_data, phases)
 
     # Save combined PDF: guide first, then plots by importance
     pdf_path = os.path.join(output_dir, "analysis.pdf")
@@ -1043,7 +1032,7 @@ def main():
 
     with PdfPages(pdf_path) as pdf:
         for fig in pdf_figures:
-            pdf.savefig(fig)
+            pdf.savefig(fig, dpi=100)
             plt.close(fig)
     print(f"  Saved: {pdf_path}")
 

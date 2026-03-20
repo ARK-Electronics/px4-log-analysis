@@ -25,7 +25,7 @@ python3 scripts/accel_vibration.py <resolved-log-path> --output-dir <logs/log-na
 
 ## After running
 
-1. Open the combined PDF for the user (`xdg-open <output-dir>/analysis.pdf`). It contains all plots plus an interpretation guide as the last page. Then read the individual PNGs yourself with the Read tool so you can interpret them.
+1. Open the combined PDF for the user (`xdg-open <output-dir>/analysis.pdf`). It contains all plots plus an interpretation guide as the first page. Read specific pages from the PDF with the Read tool (pages parameter) to interpret them: page 1 = guide, page 2 = vibration summary, page 3 = spectrogram, page 4 = PSD, page 5 = Z velocity.
 2. Interpret the findings:
    - Vibration severity (accel_vibration_metric: <1.0 good, 1-3 moderate, >3 high)
    - Whether vibration peaks track motor RPM (candidates for ESC RPM DNF)

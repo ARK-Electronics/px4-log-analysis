@@ -25,7 +25,7 @@ python3 scripts/baro_pressurization.py <resolved-log-path> --output-dir <logs/lo
 
 ## After running
 
-1. Open the combined PDF for the user (`xdg-open <output-dir>/baro_analysis.pdf`). Then read the individual PNGs yourself with the Read tool so you can interpret them.
+1. Open the combined PDF for the user (`xdg-open <output-dir>/baro_analysis.pdf`). Read specific pages from the PDF with the Read tool (pages parameter) to interpret them: page 1 = guide + params, page 2 = altitude comparison, page 3 = thrust pressurization + Vz, page 4 = correlation scatters, page 5 = EKF innovation, page 6 = raw pressure/temperature.
 2. Interpret the findings:
    - **Static baro offset**: How much the baro reads above ground truth (range sensor). >2m indicates significant prop wash pressurization.
    - **Thrust-baro correlation**: r < -0.6 means throttle changes directly modulate the baro reading. This is thrust pressurization — the propellers create a pressure depression that varies with RPM.

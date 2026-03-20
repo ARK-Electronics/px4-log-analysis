@@ -171,6 +171,54 @@ def extract_ekf_position(ulog):
     return result
 
 
+def extract_vertical_velocity(ekf_data, range_data, gnd_effect):
+    """Extract vertical velocity — EKF Vz if range is fused, else range derivative.
+
+    Returns dict with time_s and vz arrays, plus the source label.
+    """
+    # Check if range sensor is being fused via cs_rng_hgt flag
+    rng_fused = False
+    if gnd_effect and gnd_effect.get("cs_rng_hgt") is not None:
+        rng_fused = bool(np.any(gnd_effect["cs_rng_hgt"].astype(bool)))
+
+    if rng_fused and ekf_data and "vz" in ekf_data:
+        # Range is fused, so EKF Vz already incorporates it — use directly
+        return {
+            "time_s": ekf_data["time_s"],
+            "vz": -ekf_data["vz"],  # negate: NED down-positive -> up-positive
+            "source": "EKF Vz (range fused)",
+        }
+
+    if range_data and "distance_m" in range_data:
+        # Range not fused — compute derivative of raw distance sensor
+        ts = range_data["time_s"]
+        dist = range_data["distance_m"]
+        dt = np.diff(ts)
+        dz = np.diff(dist)
+        valid = dt > 0.001
+        vz = np.zeros_like(dt)
+        vz[valid] = dz[valid] / dt[valid]  # positive = climbing (distance increasing)
+        # Smooth with 5-point moving average
+        if len(vz) > 5:
+            kernel = np.ones(5) / 5
+            vz = np.convolve(vz, kernel, mode="same")
+        return {
+            "time_s": (ts[:-1] + ts[1:]) / 2,  # midpoints
+            "vz": vz,
+            "source": "Range sensor derivative",
+        }
+
+    # Fallback: use EKF Vz even without range fusion
+    if ekf_data and "vz" in ekf_data:
+        return {
+            "time_s": ekf_data["time_s"],
+            "vz": -ekf_data["vz"],
+            "source": "EKF Vz (no range)",
+        }
+
+    return {}
+
+
 def extract_thrust(ulog):
     """Extract thrust setpoint and hover thrust estimate."""
     start_us = ulog.start_timestamp
@@ -390,8 +438,7 @@ def compute_pressure_trends(baro_data, hover_start, hover_end):
 # Plotting
 # ---------------------------------------------------------------------------
 
-def plot_altitude_compare(baro_error, ekf_data, baro_data, phases,
-                          save_path):
+def plot_altitude_compare(baro_error, ekf_data, baro_data, phases):
     """Plot altitude sources comparison."""
     fig, axes = plt.subplots(2, 1, figsize=(14, 8), sharex=True,
                               gridspec_kw={"height_ratios": [3, 1]})
@@ -427,15 +474,14 @@ def plot_altitude_compare(baro_error, ekf_data, baro_data, phases,
     ax.grid(True, alpha=0.3)
 
     plt.tight_layout()
-    fig.savefig(save_path, dpi=150, bbox_inches="tight")
-    print(f"  Saved: {save_path}")
     return fig
 
 
-def plot_error_with_thrust(baro_error, thrust_data, corr, phases,
-                           hover_start, hover_end, save_path):
-    """Plot baro error timeseries with thrust overlay."""
-    fig, axes = plt.subplots(2, 1, figsize=(14, 8), sharex=True)
+def plot_error_with_thrust(baro_error, thrust_data, corr, vz_data,
+                           phases, hover_start, hover_end):
+    """Plot baro error timeseries with thrust overlay and vertical velocity."""
+    fig, axes = plt.subplots(3, 1, figsize=(14, 10), sharex=True,
+                              gridspec_kw={"height_ratios": [3, 2, 2]})
     fig.suptitle("Baro Error & Thrust Pressurization", fontsize=13,
                  fontweight="bold")
 
@@ -446,7 +492,6 @@ def plot_error_with_thrust(baro_error, thrust_data, corr, phases,
     ax = axes[0]
     ax.plot(t, err, color="tab:red", linewidth=0.8, label="Baro error")
     if "thrust_time_s" in thrust_data:
-        # Scale upward thrust to match baro error range for direct overlay
         thr_up = -thrust_data["thrust_z"]
         err_min, err_max = np.min(err), np.max(err)
         thr_min, thr_max = np.min(thr_up), np.max(thr_up)
@@ -462,8 +507,25 @@ def plot_error_with_thrust(baro_error, thrust_data, corr, phases,
     ax.legend(fontsize=9)
     ax.grid(True, alpha=0.3)
 
-    # Panel 2: detrended error vs detrended thrust (hover only)
+    # Panel 2: vertical velocity (climb/descend context)
     ax = axes[1]
+    if vz_data and "vz" in vz_data:
+        ax.plot(vz_data["time_s"], vz_data["vz"], color="tab:blue",
+                linewidth=0.8, label=vz_data["source"])
+        ax.axhline(0, color="k", linewidth=0.5, linestyle="--")
+        ax.fill_between(vz_data["time_s"], 0, vz_data["vz"],
+                         where=vz_data["vz"] > 0, alpha=0.15,
+                         color="tab:blue", label="Climbing")
+        ax.fill_between(vz_data["time_s"], 0, vz_data["vz"],
+                         where=vz_data["vz"] < 0, alpha=0.15,
+                         color="tab:red", label="Descending")
+    ax.axvspan(hover_start, hover_end, alpha=0.08, color="blue")
+    ax.set_ylabel("Vertical Vel [m/s]")
+    ax.legend(fontsize=9)
+    ax.grid(True, alpha=0.3)
+
+    # Panel 3: detrended error vs detrended thrust (hover only)
+    ax = axes[2]
     if "hover_error" in corr and "thrust_interp_hover" in corr:
         err_dt = corr["hover_error"] - np.mean(corr["hover_error"])
         thr_up = -corr["thrust_interp_hover"]
@@ -481,12 +543,10 @@ def plot_error_with_thrust(baro_error, thrust_data, corr, phases,
     ax.grid(True, alpha=0.3)
 
     plt.tight_layout()
-    fig.savefig(save_path, dpi=150, bbox_inches="tight")
-    print(f"  Saved: {save_path}")
     return fig
 
 
-def plot_correlations(corr, save_path):
+def plot_correlations(corr):
     """Scatter plots: baro error vs thrust and vs AGL."""
     fig, axes = plt.subplots(1, 3, figsize=(16, 5))
     fig.suptitle("Baro Error Correlations (Hover)", fontsize=13,
@@ -537,13 +597,11 @@ def plot_correlations(corr, save_path):
     ax.grid(True, alpha=0.3, axis="y")
 
     plt.tight_layout()
-    fig.savefig(save_path, dpi=150, bbox_inches="tight")
-    print(f"  Saved: {save_path}")
     return fig
 
 
 def plot_ekf_innovation(innov_data, gnd_effect, phases, hover_start,
-                         hover_end, save_path):
+                         hover_end):
     """Plot EKF baro innovation and ground effect status."""
     n_panels = 3 if gnd_effect else 2
     fig, axes = plt.subplots(n_panels, 1, figsize=(14, 3.5 * n_panels),
@@ -608,12 +666,10 @@ def plot_ekf_innovation(innov_data, gnd_effect, phases, hover_start,
         ax.grid(True, alpha=0.3)
 
     plt.tight_layout()
-    fig.savefig(save_path, dpi=150, bbox_inches="tight")
-    print(f"  Saved: {save_path}")
     return fig
 
 
-def plot_raw_pressure(baro_data, phases, hover_start, hover_end, save_path):
+def plot_raw_pressure(baro_data, phases, hover_start, hover_end):
     """Plot raw barometer pressure and temperature."""
     fig, axes = plt.subplots(2, 1, figsize=(14, 7), sharex=True)
     fig.suptitle("Raw Barometer Pressure & Temperature", fontsize=13,
@@ -645,8 +701,116 @@ def plot_raw_pressure(baro_data, phases, hover_start, hover_end, save_path):
         ax.grid(True, alpha=0.3)
 
     plt.tight_layout()
-    fig.savefig(save_path, dpi=150, bbox_inches="tight")
-    print(f"  Saved: {save_path}")
+    return fig
+
+
+# ---------------------------------------------------------------------------
+# Guide page
+# ---------------------------------------------------------------------------
+
+_GUIDE_TEXT = [
+    ("Altitude Comparison (p2)",
+     "Baro alt (zeroed at arm) vs range sensor vs EKF.\n"
+     "Gap between baro and range = pressurization offset.\n"
+     "Bottom: baro error timeseries (baro minus range)."),
+
+    ("Thrust Pressurization (p3)",
+     "Top: baro error with scaled thrust overlay.\n"
+     "Middle: vertical velocity (climb/descend context).\n"
+     "Bottom: detrended hover overlay showing correlation."),
+
+    ("Correlations (p4)",
+     "Left: baro error vs thrust (pressurization).\n"
+     "Center: error vs AGL (ground effect gradient).\n"
+     "Right: altitude-binned mean error with std bars."),
+
+    ("EKF Innovation (p5)",
+     "Top: baro height innovation (EKF prediction - baro).\n"
+     "Middle: test ratio (>1 = rejected by gate).\n"
+     "Bottom: EKF flags — ground effect, baro/range fuse."),
+
+    ("Raw Pressure (p6)",
+     "Raw barometer pressure and temperature.\n"
+     "Pressure drop at arm = prop wash depression.\n"
+     "Temperature trend = thermal drift check."),
+]
+
+_HGT_REF_LABELS = {0: "Barometer", 1: "GNSS", 2: "Range sensor", 3: "Vision"}
+
+
+def render_guide_page(params):
+    """Render guide + baro/height params as page 1 of the report."""
+    fig = plt.figure(figsize=(14, 9))
+    fig.patch.set_facecolor("#fafafa")
+
+    fig.text(0.5, 0.97, "Barometric Pressure Bias Report",
+             fontsize=18, fontweight="bold", ha="center", va="top",
+             family="sans-serif")
+
+    # Left: plot guide
+    fig.text(0.06, 0.91, "Plot Guide",
+             fontsize=13, fontweight="bold", va="top",
+             family="sans-serif", color="#333333")
+
+    colors = ["#d32f2f", "#e65100", "#2e7d32", "#1565c0", "#6a1b9a"]
+    y = 0.86
+    for i, (title, body) in enumerate(_GUIDE_TEXT):
+        color = colors[i]
+        fig.patches.append(plt.Rectangle(
+            (0.05, y - 0.003), 0.004, 0.018,
+            transform=fig.transFigure, facecolor=color, clip_on=False))
+        fig.text(0.065, y, title,
+                 fontsize=10, fontweight="bold", va="top",
+                 family="sans-serif", color=color)
+        fig.text(0.07, y - 0.025, body,
+                 fontsize=8.5, va="top", family="sans-serif",
+                 linespacing=1.5, color="#444444")
+        y -= 0.025 + 0.02 * (body.count("\n") + 1) + 0.03
+
+    # Right: parameters
+    fig.text(0.55, 0.91, "Height / Baro Parameters",
+             fontsize=13, fontweight="bold", va="top",
+             family="sans-serif", color="#333333")
+
+    param_groups = [
+        ("Height Reference", [
+            ("EKF2_HGT_REF", _HGT_REF_LABELS),
+            ("EKF2_BARO_CTRL", None),
+            ("EKF2_RNG_CTRL", None),
+        ]),
+        ("Baro Fusion", [
+            ("EKF2_BARO_NOISE", None),
+            ("EKF2_BARO_GATE", None),
+            ("EKF2_BARO_DELAY", None),
+            ("SENS_BARO_RATE", None),
+        ]),
+        ("Ground Effect", [
+            ("EKF2_GND_EFF_DZ", None),
+            ("EKF2_GND_MAX_HGT", None),
+        ]),
+    ]
+
+    y = 0.86
+    for group_name, param_list in param_groups:
+        fig.text(0.56, y, group_name,
+                 fontsize=10, fontweight="bold", va="top",
+                 family="sans-serif", color="#555555")
+        y -= 0.03
+        for pname, labels in param_list:
+            val = params.get(pname, "N/A")
+            extra = ""
+            if labels and val != "N/A":
+                extra = f"  ({labels.get(int(val), '?')})"
+            fig.text(0.58, y, pname, fontsize=8.5, va="top",
+                     family="monospace", color="#444444")
+            fig.text(0.82, y, f"{val}{extra}", fontsize=8.5, va="top",
+                     family="monospace", color="#111111", fontweight="bold")
+            y -= 0.022
+        y -= 0.015
+
+    fig.text(0.5, 0.02, "Generated by baro_pressurization.py",
+             fontsize=8, ha="center", color="#999999", family="sans-serif")
+
     return fig
 
 
@@ -846,8 +1010,8 @@ def main():
 
     # Collect parameters
     param_names = [
-        "EKF2_HGT_REF", "EKF2_BARO_CTRL", "EKF2_BARO_NOISE",
-        "EKF2_BARO_GATE", "EKF2_BARO_DELAY",
+        "EKF2_HGT_REF", "EKF2_BARO_CTRL", "EKF2_RNG_CTRL",
+        "EKF2_BARO_NOISE", "EKF2_BARO_GATE", "EKF2_BARO_DELAY",
         "EKF2_GND_EFF_DZ", "EKF2_GND_MAX_HGT",
         "SENS_BARO_QNH", "SENS_BARO_RATE",
     ]
@@ -884,11 +1048,17 @@ def main():
 
     has_range = bool(range_data)
     has_baro = "baro_time_s" in baro_data
+
+    # Vertical velocity (EKF Vz if range fused, else range derivative)
+    vz_data = extract_vertical_velocity(ekf_data, range_data, gnd_effect)
+
     print(f"  Baro data: {'yes' if has_baro else 'NO'}")
     print(f"  Range sensor: {'yes' if has_range else 'NO'}")
     print(f"  Thrust data: {'yes' if thrust_data else 'NO'}")
     print(f"  Baro innovation: {'yes' if innov_data else 'NO'}")
     print(f"  Ground effect flags: {'yes' if gnd_effect else 'NO'}")
+    if vz_data:
+        print(f"  Vertical velocity: {vz_data['source']}")
 
     if not has_baro:
         print("Error: no barometer data found", file=sys.stderr)
@@ -916,35 +1086,25 @@ def main():
 
     # Generate plots
     print("\nGenerating plots...")
-    figures = []
+    figures = [render_guide_page(params)]  # page 1: guide + params
 
     if baro_error:
-        fig1 = plot_altitude_compare(
-            baro_error, ekf_data, baro_data, phases,
-            os.path.join(output_dir, "baro_altitude_compare.png"))
-        figures.append(fig1)
-
-        fig2 = plot_error_with_thrust(
-            baro_error, thrust_data, corr, phases, hover_start, hover_end,
-            os.path.join(output_dir, "baro_error_thrust.png"))
-        figures.append(fig2)
+        figures.append(plot_altitude_compare(
+            baro_error, ekf_data, baro_data, phases))
+        figures.append(plot_error_with_thrust(
+            baro_error, thrust_data, corr, vz_data,
+            phases, hover_start, hover_end))
 
     if corr and "hover_error" in corr:
-        fig3 = plot_correlations(
-            corr, os.path.join(output_dir, "baro_correlation.png"))
-        figures.append(fig3)
+        figures.append(plot_correlations(corr))
 
     if innov_data or gnd_effect:
-        fig4 = plot_ekf_innovation(
-            innov_data, gnd_effect, phases, hover_start, hover_end,
-            os.path.join(output_dir, "baro_ekf_innovation.png"))
-        figures.append(fig4)
+        figures.append(plot_ekf_innovation(
+            innov_data, gnd_effect, phases, hover_start, hover_end))
 
     if "raw_time_s" in baro_data:
-        fig5 = plot_raw_pressure(
-            baro_data, phases, hover_start, hover_end,
-            os.path.join(output_dir, "baro_raw_pressure.png"))
-        figures.append(fig5)
+        figures.append(plot_raw_pressure(
+            baro_data, phases, hover_start, hover_end))
 
     # Combined PDF
     pdf_path = os.path.join(output_dir, "baro_analysis.pdf")
