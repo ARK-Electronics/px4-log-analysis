@@ -17,6 +17,10 @@ SDLOG_PROFILES = {
     5: "Debug",
     6: "Sensor comparison",
     7: "Computer Vision and Avoidance",
+    8: "Raw FIFO high-rate IMU (Gyro)",
+    9: "Raw FIFO high-rate IMU (Accel)",
+    10: "Mavlink tunnel message logging",
+    11: "High rate sensors",
 }
 
 # Rough topic-to-category mapping for the summary breakdown.
