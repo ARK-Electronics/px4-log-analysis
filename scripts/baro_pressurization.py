@@ -435,42 +435,37 @@ def plot_altitude_compare(baro_error, ekf_data, baro_data, phases,
 def plot_error_with_thrust(baro_error, thrust_data, corr, phases,
                            hover_start, hover_end, save_path):
     """Plot baro error timeseries with thrust overlay."""
-    fig, axes = plt.subplots(3, 1, figsize=(14, 10), sharex=True)
+    fig, axes = plt.subplots(2, 1, figsize=(14, 8), sharex=True)
     fig.suptitle("Baro Error & Thrust Pressurization", fontsize=13,
                  fontweight="bold")
 
     t = baro_error["time_s"]
     err = baro_error["error"]
 
-    # Panel 1: baro error
+    # Panel 1: baro error with scaled upward thrust overlay
     ax = axes[0]
     ax.plot(t, err, color="tab:red", linewidth=0.8, label="Baro error")
-    ax.axhline(corr.get("hover_error_mean", 0), color="gray",
-               linestyle="--", linewidth=0.7, alpha=0.7,
-               label=f'Hover mean: {corr.get("hover_error_mean", 0):.2f} m')
+    if "thrust_time_s" in thrust_data:
+        # Scale upward thrust to match baro error range for direct overlay
+        thr_up = -thrust_data["thrust_z"]
+        err_min, err_max = np.min(err), np.max(err)
+        thr_min, thr_max = np.min(thr_up), np.max(thr_up)
+        thr_scaled = (thr_up - thr_min) / (thr_max - thr_min + 1e-10) \
+                     * (err_max - err_min) + err_min
+        r_val = corr.get("corr_thrust", 0)
+        ax.plot(thrust_data["thrust_time_s"], thr_scaled,
+                color="tab:orange", linewidth=0.8, alpha=0.7,
+                label=f"Upward thrust (scaled), |r|={abs(r_val):.2f}")
     ax.axvspan(hover_start, hover_end, alpha=0.08, color="blue",
                label="Hover segment")
     ax.set_ylabel("Baro Error [m]")
     ax.legend(fontsize=9)
     ax.grid(True, alpha=0.3)
 
-    # Panel 2: thrust (negate so positive = upward, matching baro error sign)
+    # Panel 2: detrended error vs detrended thrust (hover only)
     ax = axes[1]
-    if "thrust_time_s" in thrust_data:
-        ax.plot(thrust_data["thrust_time_s"], -thrust_data["thrust_z"],
-                color="tab:orange", linewidth=0.8, label="Upward thrust")
-    ax.axvspan(hover_start, hover_end, alpha=0.08, color="blue")
-    ax.set_ylabel("Thrust (up)")
-    ax.legend(fontsize=9)
-    ax.grid(True, alpha=0.3)
-
-    # Panel 3: detrended error vs detrended thrust (hover only)
-    # Use thrust_z directly — it's negative in NED, so negate once to get
-    # "upward thrust" which has the same sign as baro error.
-    ax = axes[2]
     if "hover_error" in corr and "thrust_interp_hover" in corr:
         err_dt = corr["hover_error"] - np.mean(corr["hover_error"])
-        # Negate thrust_z so positive = more upward thrust = more baro error
         thr_up = -corr["thrust_interp_hover"]
         thr_dt = thr_up - np.mean(thr_up)
         thr_scale = np.std(err_dt) / (np.std(thr_dt) + 1e-10)
