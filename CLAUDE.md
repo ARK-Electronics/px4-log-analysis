@@ -1,11 +1,12 @@
 # PX4 ULog Analysis Toolkit
 
-Tools for analyzing PX4 ULog flight log files — size profiling, topic breakdowns, and optimization insights.
+Tools for analyzing PX4 ULog flight log files — size profiling, vibration analysis, and optimization insights.
 
 ## Dependencies
 
 - Python 3.10+
 - `pyulog` — install with `pip install pyulog`
+- `numpy`, `matplotlib`, `scipy` — install with `pip install numpy matplotlib scipy`
 
 ## Skills
 

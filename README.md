@@ -5,7 +5,7 @@ A collection of tools for analyzing PX4 ULog flight log files, exposed as [Claud
 ## Setup
 
 ```bash
-pip install pyulog
+pip install pyulog numpy matplotlib scipy
 ```
 
 Requires Python 3.10+.
@@ -29,6 +29,7 @@ python3 scripts/profile_log_size.py path/to/log.ulg
 | Skill | Description |
 |-------|-------------|
 | `/profile-log` | Break down a `.ulg` file by topic size, rate, and category |
+| `/accel-vibration` | Analyze accel vibration, compute PSDs/spectrograms, identify notch filter targets |
 
 ## Structure
 
