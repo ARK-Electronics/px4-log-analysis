@@ -536,14 +536,15 @@ def plot_error_with_thrust(baro_error, thrust_data, corr, vz_data,
     return fig
 
 
-def plot_correlations(corr):
-    """Scatter plots: baro error vs thrust and vs AGL."""
-    fig, axes = plt.subplots(1, 3, figsize=(16, 5))
+def plot_correlations(corr, innov_data=None, thrust_data=None,
+                      hover_start=None, hover_end=None, pcoef_thr=0.0):
+    """Scatter plots: baro error vs thrust, vs AGL, binned error, compensated error."""
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
     fig.suptitle("Baro Error Correlations (Hover)", fontsize=13,
                  fontweight="bold")
 
     # Error vs thrust
-    ax = axes[0]
+    ax = axes[0, 0]
     if "thrust_interp_hover" in corr:
         ax.scatter(corr["thrust_interp_hover"], corr["hover_error"],
                    s=3, alpha=0.4, color="tab:orange")
@@ -554,11 +555,12 @@ def plot_correlations(corr):
         ax.plot(x_fit, np.polyval(z, x_fit), "k--", linewidth=1.2)
         ax.set_xlabel("Thrust Z setpoint")
         ax.set_ylabel("Baro Error [m]")
-        ax.set_title(f"Thrust Pressurization\nr = {corr.get('corr_thrust', 0):.3f}")
+        ax.set_title(f"Thrust Pressurization\nr = {corr.get('corr_thrust', 0):.3f}"
+                     f",  slope = {z[0]:.1f} m/unit")
     ax.grid(True, alpha=0.3)
 
     # Error vs AGL
-    ax = axes[1]
+    ax = axes[0, 1]
     ax.scatter(corr["hover_alt"], corr["hover_error"], s=3, alpha=0.4,
                color="tab:green")
     z = np.polyfit(corr["hover_alt"], corr["hover_error"], 1)
@@ -566,11 +568,12 @@ def plot_correlations(corr):
     ax.plot(x_fit, np.polyval(z, x_fit), "k--", linewidth=1.2)
     ax.set_xlabel("AGL [m]")
     ax.set_ylabel("Baro Error [m]")
-    ax.set_title(f"Ground Effect\nr = {corr.get('corr_altitude', 0):.3f}")
+    ax.set_title(f"Ground Effect\nr = {corr.get('corr_altitude', 0):.3f}"
+                 f",  slope = {z[0]:.1f} m/m")
     ax.grid(True, alpha=0.3)
 
     # Altitude-binned bar chart
-    ax = axes[2]
+    ax = axes[1, 0]
     if corr.get("alt_bins"):
         bins = corr["alt_bins"]
         centers = [(b["lo"] + b["hi"]) / 2 for b in bins]
@@ -580,11 +583,34 @@ def plot_correlations(corr):
         ax.bar(range(len(bins)), means, yerr=stds, width=0.7,
                color="tab:green", alpha=0.7, capsize=3)
         ax.set_xticks(range(len(bins)))
-        ax.set_xticklabels(labels, fontsize=8)
+        ax.set_xticklabels(labels, fontsize=8, rotation=45, ha="right")
         ax.set_xlabel("AGL bin [m]")
         ax.set_ylabel("Mean Baro Error [m]")
         ax.set_title("Altitude-Binned Error")
     ax.grid(True, alpha=0.3, axis="y")
+
+    # Compensated baro error vs thrust
+    ax = axes[1, 1]
+    if "thrust_interp_hover" in corr:
+        thrust_hov = corr["thrust_interp_hover"]
+        err_hov = corr["hover_error"]
+        # Apply compensation: thrust_mag = -thrust_z (constrained 0-1)
+        thrust_mag = np.clip(-thrust_hov, 0, 1)
+        comp_error = err_hov + pcoef_thr * thrust_mag
+        ax.scatter(thrust_hov, comp_error, s=3, alpha=0.4, color="tab:purple")
+        z = np.polyfit(thrust_hov, comp_error, 1)
+        x_fit = np.linspace(thrust_hov.min(), thrust_hov.max(), 50)
+        ax.plot(x_fit, np.polyval(z, x_fit), "k--", linewidth=1.2)
+        r_val = float(np.corrcoef(thrust_hov, comp_error)[0, 1])
+        coef_label = f"PCOEF_THR={pcoef_thr:.1f}"
+        ax.set_title(f"Compensated Error vs Thrust ({coef_label})\n"
+                     f"r = {r_val:.3f},  slope = {z[0]:.1f} m/unit")
+    else:
+        ax.set_title("Compensated Error vs Thrust\n(no data)")
+    ax.set_xlabel("Thrust Z setpoint")
+    ax.set_ylabel("Compensated Error [m]")
+    ax.axhline(0, color="k", linewidth=0.5, linestyle="--", alpha=0.3)
+    ax.grid(True, alpha=0.3)
 
     plt.tight_layout()
     return fig
@@ -710,9 +736,10 @@ _GUIDE_TEXT = [
      "Bottom: detrended hover overlay showing correlation."),
 
     ("Correlations (p4)",
-     "Left: baro error vs thrust (pressurization).\n"
-     "Center: error vs AGL (ground effect gradient).\n"
-     "Right: altitude-binned mean error with std bars."),
+     "Top-left: raw baro error vs thrust (pressurization).\n"
+     "Top-right: error vs AGL (ground effect gradient).\n"
+     "Bottom-left: altitude-binned mean error with std bars.\n"
+     "Bottom-right: compensated error vs thrust (after PCOEF_THR)."),
 
     ("EKF Innovation (p5)",
      "Top: baro height innovation (EKF prediction - baro).\n"
@@ -774,6 +801,9 @@ def render_guide_page(params):
             ("EKF2_BARO_DELAY", None),
             ("SENS_BARO_RATE", None),
         ]),
+        ("Thrust Compensation", [
+            ("EKF2_PCOEF_THR", None),
+        ]),
         ("Ground Effect", [
             ("EKF2_GND_EFF_DZ", None),
             ("EKF2_GND_MAX_HGT", None),
@@ -829,6 +859,7 @@ def generate_summary(phases, params, baro_error, corr, press_trends,
     lines.append(f"  EKF2_BARO_CTRL          = {params.get('EKF2_BARO_CTRL', 'N/A')}")
     lines.append(f"  EKF2_BARO_NOISE         = {params.get('EKF2_BARO_NOISE', 'N/A')}")
     lines.append(f"  EKF2_BARO_GATE          = {params.get('EKF2_BARO_GATE', 'N/A')}")
+    lines.append(f"  EKF2_PCOEF_THR          = {params.get('EKF2_PCOEF_THR', 'N/A')}")
     lines.append(f"  EKF2_GND_EFF_DZ         = {params.get('EKF2_GND_EFF_DZ', 'N/A')}")
     lines.append(f"  EKF2_GND_MAX_HGT        = {params.get('EKF2_GND_MAX_HGT', 'N/A')}")
 
@@ -1003,6 +1034,7 @@ def main():
         "EKF2_HGT_REF", "EKF2_BARO_CTRL", "EKF2_RNG_CTRL",
         "EKF2_BARO_NOISE", "EKF2_BARO_GATE", "EKF2_BARO_DELAY",
         "EKF2_GND_EFF_DZ", "EKF2_GND_MAX_HGT",
+        "EKF2_PCOEF_THR",
         "SENS_BARO_QNH", "SENS_BARO_RATE",
     ]
     params = {}
@@ -1020,6 +1052,10 @@ def main():
           f"gate: {params.get('EKF2_BARO_GATE', 'N/A')} sigma")
     print(f"Ground effect: deadzone={params.get('EKF2_GND_EFF_DZ', 'N/A')} m, "
           f"max_hgt={params.get('EKF2_GND_MAX_HGT', 'N/A')} m")
+    pcoef = params.get('EKF2_PCOEF_THR')
+    if pcoef is not None:
+        print(f"Thrust compensation: EKF2_PCOEF_THR={pcoef}"
+              f"{' (disabled)' if pcoef == 0 else ''}")
 
     # Detect flight phases
     phases = detect_flight_phases(ulog)
@@ -1086,7 +1122,10 @@ def main():
             phases, hover_start, hover_end))
 
     if corr and "hover_error" in corr:
-        figures.append(plot_correlations(corr))
+        pcoef = float(params.get("EKF2_PCOEF_THR", 0))
+        figures.append(plot_correlations(corr, innov_data, thrust_data,
+                                         hover_start, hover_end,
+                                         pcoef_thr=pcoef))
 
     if innov_data or gnd_effect:
         figures.append(plot_ekf_innovation(
