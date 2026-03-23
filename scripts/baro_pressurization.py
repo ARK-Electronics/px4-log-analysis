@@ -6,16 +6,16 @@ Investigates thrust-induced baro pressurization, ground effect contamination,
 thermal drift, and their impact on EKF height estimation.
 
 Usage:
-    python3 baro_pressurization.py <log.ulg> [--output-dir <dir>]
+    python3 baro_pressurization.py <log.ulg> [--output-dir <dir>] [--calibrate]
+
+Options:
+    --calibrate   Run system identification to find optimal EKF2_PCOEF_THR
+                  and EKF2_PCOEF_TTAU values. Requires range sensor data.
 
 Outputs:
-    - baro_altitude_compare.png   Baro vs range sensor vs EKF altitude
-    - baro_error_thrust.png       Baro error timeseries with thrust overlay
-    - baro_correlation.png        Scatter plots: error vs thrust, error vs AGL
-    - baro_ekf_innovation.png     EKF baro innovation and fusion status
-    - baro_raw_pressure.png       Raw barometer pressure and temperature
-    - analysis.pdf                Combined PDF with all plots
-    - summary.txt                 Text summary with findings
+    - baro_analysis.pdf           Combined PDF with all plots
+    - baro_summary.txt            Text summary with findings
+    When --calibrate: recommended EKF2_PCOEF_THR / EKF2_PCOEF_TTAU values
 """
 
 import argparse
@@ -400,6 +400,162 @@ def compute_correlations(baro_error, thrust_data, hover_start, hover_end):
     return result
 
 
+def first_order_lpf(signal, time_s, tau):
+    """Apply a causal first-order low-pass filter with time constant tau.
+
+    Matches the AlphaFilter used in the EKF: alpha = dt / (dt + tau).
+    """
+    if tau <= 0 or len(signal) < 2:
+        return signal.copy()
+    out = np.empty_like(signal)
+    out[0] = signal[0]
+    for i in range(1, len(signal)):
+        dt = time_s[i] - time_s[i - 1]
+        if dt <= 0:
+            out[i] = out[i - 1]
+            continue
+        alpha = dt / (dt + tau)
+        out[i] = out[i - 1] + alpha * (signal[i] - out[i - 1])
+    return out
+
+
+def calibrate_thrust_compensation(baro_error, thrust_data, hover_start,
+                                   hover_end):
+    """System identification for thrust-based baro compensation.
+
+    Fits a first-order lag model:  baro_error ≈ K * LPF(thrust, tau) + c
+
+    Returns dict with identified K (EKF2_PCOEF_THR), tau (EKF2_PCOEF_TTAU),
+    cross-correlation data, and sweep results for plotting.
+    """
+    if not baro_error or "thrust_time_s" not in thrust_data:
+        return {}
+
+    err_t = baro_error["time_s"]
+    err = baro_error["error"]
+
+    # Focus on hover segment
+    hov = (err_t >= hover_start) & (err_t <= hover_end)
+    if hov.sum() < 20:
+        return {}
+
+    err_t_hov = err_t[hov]
+    err_hov = err[hov]
+
+    # Interpolate thrust onto baro error timestamps
+    thrust_raw = np.interp(err_t_hov, thrust_data["thrust_time_s"],
+                            thrust_data["thrust_z"])
+    # Convert to magnitude: thrust_z is negative-down, so negate and clamp
+    thrust_mag = np.clip(-thrust_raw, 0, 1)
+
+    # Detrend error to remove slow drift (thermal, bias drift)
+    err_detrended = err_hov - np.polyval(np.polyfit(err_t_hov, err_hov, 1),
+                                          err_t_hov)
+    thrust_detrended = thrust_mag - np.mean(thrust_mag)
+
+    result = {}
+
+    # --- Cross-correlation to visualize delay structure ---
+    dt_median = np.median(np.diff(err_t_hov))
+    if dt_median > 0:
+        max_lag_samples = min(int(2.0 / dt_median), len(err_detrended) // 2)
+        if max_lag_samples > 5:
+            xcorr = np.correlate(err_detrended, thrust_detrended, "full")
+            mid = len(thrust_detrended) - 1
+            lags = (np.arange(len(xcorr)) - mid) * dt_median
+            # Normalise
+            norm = np.sqrt(np.sum(err_detrended**2) *
+                           np.sum(thrust_detrended**2))
+            if norm > 0:
+                xcorr = xcorr / norm
+            # Keep +/- 2 seconds around zero
+            valid = (lags >= -2.0) & (lags <= 2.0)
+            result["xcorr_lags_s"] = lags[valid]
+            result["xcorr_values"] = xcorr[valid]
+
+            # Peak lag (positive means error lags behind thrust)
+            peak_idx = np.argmax(np.abs(xcorr[valid]))
+            result["xcorr_peak_lag_s"] = float(lags[valid][peak_idx])
+            result["xcorr_peak_value"] = float(xcorr[valid][peak_idx])
+
+    # --- Grid search over time constants ---
+    tau_candidates = np.concatenate([
+        [0.0],
+        np.arange(0.02, 0.2, 0.02),
+        np.arange(0.2, 1.01, 0.05),
+    ])
+
+    sweep_tau = []
+    sweep_r2 = []
+    sweep_K = []
+    sweep_rmse = []
+
+    err_var = np.var(err_detrended)
+    if err_var < 1e-10:
+        return {}
+
+    for tau in tau_candidates:
+        thrust_filt = first_order_lpf(thrust_mag, err_t_hov, tau)
+        thrust_filt_dt = thrust_filt - np.mean(thrust_filt)
+
+        # Least-squares fit: err_detrended = K * thrust_filt_dt
+        var_thr = np.var(thrust_filt_dt)
+        if var_thr < 1e-10:
+            continue
+
+        K = np.sum(err_detrended * thrust_filt_dt) / np.sum(thrust_filt_dt**2)
+        residual = err_detrended - K * thrust_filt_dt
+        r2 = 1.0 - np.var(residual) / err_var
+        rmse = float(np.sqrt(np.mean(residual**2)))
+
+        sweep_tau.append(float(tau))
+        sweep_r2.append(float(r2))
+        sweep_K.append(float(K))
+        sweep_rmse.append(rmse)
+
+    if not sweep_tau:
+        return {}
+
+    result["sweep_tau"] = np.array(sweep_tau)
+    result["sweep_r2"] = np.array(sweep_r2)
+    result["sweep_K"] = np.array(sweep_K)
+    result["sweep_rmse"] = np.array(sweep_rmse)
+
+    # Best fit: highest R²
+    best_idx = int(np.argmax(sweep_r2))
+    result["best_tau"] = sweep_tau[best_idx]
+    result["best_K"] = sweep_K[best_idx]
+    result["best_r2"] = sweep_r2[best_idx]
+    result["best_rmse"] = sweep_rmse[best_idx]
+
+    # Compute the compensated timeseries for the best model (for plotting)
+    best_thrust_filt = first_order_lpf(thrust_mag, err_t_hov, result["best_tau"])
+    result["best_compensated_error"] = (
+        err_hov - result["best_K"] * best_thrust_filt)
+    result["best_thrust_filtered"] = best_thrust_filt
+
+    # Also store the unfiltered (tau=0) result for comparison
+    K_nolag = sweep_K[0] if sweep_tau[0] == 0.0 else 0.0
+    r2_nolag = sweep_r2[0] if sweep_tau[0] == 0.0 else 0.0
+    result["nolag_K"] = K_nolag
+    result["nolag_r2"] = r2_nolag
+
+    # Store hover slices for plotting
+    result["hover_time"] = err_t_hov
+    result["hover_error"] = err_hov
+    result["thrust_mag"] = thrust_mag
+
+    # Recommended parameters (sign flip: EKF2_PCOEF_THR corrects, so negate K)
+    # K here is the measured relationship: error = K * thrust, so to *remove*
+    # that error, the EKF should apply correction = -K * thrust.
+    # But the EKF adds: baro_alt += pcoef_thr * thrust
+    # If K is negative (thrust makes baro read lower), pcoef_thr should be positive.
+    result["recommended_pcoef_thr"] = -result["best_K"]
+    result["recommended_pcoef_thr_tau"] = result["best_tau"]
+
+    return result
+
+
 def compute_pressure_trends(baro_data, hover_start, hover_end):
     """Analyze raw pressure and temperature trends."""
     if "raw_time_s" not in baro_data:
@@ -685,6 +841,91 @@ def plot_ekf_innovation(innov_data, gnd_effect, phases, hover_start,
     return fig
 
 
+def plot_calibration(calib, hover_start, hover_end):
+    """Plot thrust compensation calibration results."""
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    fig.suptitle("Thrust Compensation Calibration", fontsize=13,
+                 fontweight="bold")
+
+    # Top-left: Cross-correlation
+    ax = axes[0, 0]
+    if "xcorr_lags_s" in calib:
+        ax.plot(calib["xcorr_lags_s"] * 1000, calib["xcorr_values"],
+                color="tab:blue", linewidth=1.0)
+        peak_lag = calib["xcorr_peak_lag_s"]
+        peak_val = calib["xcorr_peak_value"]
+        ax.axvline(peak_lag * 1000, color="tab:red", linestyle="--",
+                    linewidth=0.8,
+                    label=f"Peak: {peak_lag*1000:.0f} ms (r={peak_val:.2f})")
+        ax.axvline(0, color="k", linewidth=0.5, linestyle=":")
+        ax.legend(fontsize=9)
+    ax.set_xlabel("Lag [ms] (positive = error lags thrust)")
+    ax.set_ylabel("Cross-correlation")
+    ax.set_title("Cross-Correlation: Thrust vs Baro Error")
+    ax.grid(True, alpha=0.3)
+
+    # Top-right: R² vs time constant
+    ax = axes[0, 1]
+    if "sweep_tau" in calib:
+        ax.plot(calib["sweep_tau"], calib["sweep_r2"],
+                "o-", color="tab:green", markersize=3, linewidth=1.0)
+        best_tau = calib["best_tau"]
+        best_r2 = calib["best_r2"]
+        ax.axvline(best_tau, color="tab:red", linestyle="--", linewidth=0.8,
+                    label=f"Best: tau={best_tau:.2f}s (R²={best_r2:.3f})")
+        ax.legend(fontsize=9)
+    ax.set_xlabel("Time constant tau [s]")
+    ax.set_ylabel("R²")
+    ax.set_title("Model Fit vs Time Constant")
+    ax.grid(True, alpha=0.3)
+
+    # Bottom-left: Before/after compensation timeseries
+    ax = axes[1, 0]
+    if "hover_time" in calib and "best_compensated_error" in calib:
+        t = calib["hover_time"]
+        ax.plot(t, calib["hover_error"], color="tab:red", linewidth=0.8,
+                alpha=0.7, label="Raw baro error")
+        ax.plot(t, calib["best_compensated_error"], color="tab:blue",
+                linewidth=0.8,
+                label=f"After compensation (K={calib['best_K']:.2f},"
+                      f" tau={calib['best_tau']:.2f}s)")
+        ax.axhline(0, color="k", linewidth=0.5, linestyle="--")
+        ax.legend(fontsize=9)
+    ax.set_xlabel("Time [s]")
+    ax.set_ylabel("Baro Error [m]")
+    ax.set_title("Compensation Effect")
+    ax.grid(True, alpha=0.3)
+
+    # Bottom-right: Recommended parameters text
+    ax = axes[1, 1]
+    ax.axis("off")
+    if "recommended_pcoef_thr" in calib:
+        lines = [
+            "Recommended Parameters",
+            "",
+            f"  EKF2_PCOEF_THR  = {calib['recommended_pcoef_thr']:+.2f}  m",
+            f"  EKF2_PCOEF_TTAU = {calib['recommended_pcoef_thr_tau']:.2f}  s",
+            "",
+            f"  Identified gain K  = {calib['best_K']:.3f} m/unit",
+            f"  Time constant tau  = {calib['best_tau']:.3f} s",
+            f"  Model R²           = {calib['best_r2']:.3f}",
+            f"  Residual RMSE      = {calib['best_rmse']:.3f} m",
+            "",
+            f"  No-lag model R²    = {calib['nolag_r2']:.3f}",
+            f"  R² improvement     = {calib['best_r2'] - calib['nolag_r2']:.3f}",
+        ]
+        if "xcorr_peak_lag_s" in calib:
+            lines.append(
+                f"  Cross-corr peak    = {calib['xcorr_peak_lag_s']*1000:.0f} ms")
+        ax.text(0.1, 0.95, "\n".join(lines), transform=ax.transAxes,
+                fontsize=11, verticalalignment="top", family="monospace",
+                bbox=dict(boxstyle="round,pad=0.5", facecolor="#f0f0f0",
+                          edgecolor="#cccccc"))
+
+    plt.tight_layout()
+    return fig
+
+
 def plot_raw_pressure(baro_data, phases, hover_start, hover_end):
     """Plot raw barometer pressure and temperature."""
     fig, axes = plt.subplots(2, 1, figsize=(14, 7), sharex=True)
@@ -746,7 +987,13 @@ _GUIDE_TEXT = [
      "Middle: test ratio (>1 = rejected by gate).\n"
      "Bottom: EKF flags — ground effect, baro/range fuse."),
 
-    ("Raw Pressure (p6)",
+    ("Calibration (p6, if --calibrate)",
+     "Top-left: cross-correlation showing delay structure.\n"
+     "Top-right: R² vs time constant tau for model selection.\n"
+     "Bottom-left: before/after compensation timeseries.\n"
+     "Bottom-right: recommended EKF2_PCOEF_THR and EKF2_PCOEF_TTAU."),
+
+    ("Raw Pressure (p7)",
      "Raw barometer pressure and temperature.\n"
      "Pressure drop at arm = prop wash depression.\n"
      "Temperature trend = thermal drift check."),
@@ -769,7 +1016,7 @@ def render_guide_page(params):
              fontsize=13, fontweight="bold", va="top",
              family="sans-serif", color="#333333")
 
-    colors = ["#d32f2f", "#e65100", "#2e7d32", "#1565c0", "#6a1b9a"]
+    colors = ["#d32f2f", "#e65100", "#2e7d32", "#1565c0", "#6a1b9a", "#00838f"]
     y = 0.86
     for i, (title, body) in enumerate(_GUIDE_TEXT):
         color = colors[i]
@@ -803,6 +1050,7 @@ def render_guide_page(params):
         ]),
         ("Thrust Compensation", [
             ("EKF2_PCOEF_THR", None),
+            ("EKF2_PCOEF_TTAU", None),
         ]),
         ("Ground Effect", [
             ("EKF2_GND_EFF_DZ", None),
@@ -839,7 +1087,8 @@ def render_guide_page(params):
 # ---------------------------------------------------------------------------
 
 def generate_summary(phases, params, baro_error, corr, press_trends,
-                     innov_data, gnd_effect, hover_start, hover_end):
+                     innov_data, gnd_effect, hover_start, hover_end,
+                     calib=None):
     """Generate text summary of findings."""
     lines = []
     lines.append("=" * 70)
@@ -961,6 +1210,35 @@ def generate_summary(phases, params, baro_error, corr, press_trends,
                          f"(below GND_MAX_HGT={gnd_max_hgt}) "
                          f"but ground effect flag is NEVER active!")
 
+    # Calibration
+    if calib and "best_K" in calib:
+        lines.append("\n" + "=" * 70)
+        lines.append("THRUST COMPENSATION CALIBRATION")
+        lines.append("=" * 70)
+        lines.append(f"\n  Model: baro_error = K * LPF(thrust, tau)")
+        lines.append(f"  Identified gain K          = {calib['best_K']:.3f} m/unit")
+        lines.append(f"  Identified time constant   = {calib['best_tau']:.3f} s")
+        lines.append(f"  Model R²                   = {calib['best_r2']:.3f}")
+        lines.append(f"  Residual RMSE              = {calib['best_rmse']:.3f} m")
+        if "xcorr_peak_lag_s" in calib:
+            lines.append(f"  Cross-corr peak lag        = "
+                          f"{calib['xcorr_peak_lag_s']*1000:.0f} ms")
+        lines.append(f"\n  No-lag model (tau=0):")
+        lines.append(f"    R²                       = {calib['nolag_r2']:.3f}")
+        improvement = calib['best_r2'] - calib['nolag_r2']
+        lines.append(f"    R² improvement from lag   = {improvement:+.3f}")
+
+        lines.append(f"\n  RECOMMENDED PARAMETERS:")
+        lines.append(f"    EKF2_PCOEF_THR  = {calib['recommended_pcoef_thr']:+.2f}")
+        lines.append(f"    EKF2_PCOEF_TTAU = {calib['recommended_pcoef_thr_tau']:.2f}")
+
+        if calib['best_r2'] < 0.1:
+            lines.append(f"\n  NOTE: Low R² ({calib['best_r2']:.3f}) suggests thrust is not "
+                          "the dominant baro error source. Compensation may not help.")
+        elif improvement < 0.01:
+            lines.append(f"\n  NOTE: Lag filter provides negligible improvement. "
+                          "The system delay may be short enough that tau=0 is fine.")
+
     # Assessment
     lines.append("\n" + "=" * 70)
     lines.append("ASSESSMENT")
@@ -1013,6 +1291,9 @@ def main():
     parser.add_argument("ulog_file", help="Path to .ulg file")
     parser.add_argument("--output-dir", "-o", default=None,
                         help="Output directory (default: same dir as log)")
+    parser.add_argument("--calibrate", action="store_true",
+                        help="Run system identification to find optimal "
+                             "EKF2_PCOEF_THR and EKF2_PCOEF_TTAU values")
     args = parser.parse_args()
 
     if not os.path.isfile(args.ulog_file):
@@ -1034,7 +1315,7 @@ def main():
         "EKF2_HGT_REF", "EKF2_BARO_CTRL", "EKF2_RNG_CTRL",
         "EKF2_BARO_NOISE", "EKF2_BARO_GATE", "EKF2_BARO_DELAY",
         "EKF2_GND_EFF_DZ", "EKF2_GND_MAX_HGT",
-        "EKF2_PCOEF_THR",
+        "EKF2_PCOEF_THR", "EKF2_PCOEF_TTAU",
         "SENS_BARO_QNH", "SENS_BARO_RATE",
     ]
     params = {}
@@ -1110,6 +1391,25 @@ def main():
     # Pressure trends
     press_trends = compute_pressure_trends(baro_data, hover_start, hover_end)
 
+    # Calibration (system identification)
+    calib = {}
+    if args.calibrate:
+        if baro_error and thrust_data:
+            print("\nRunning thrust compensation calibration...")
+            calib = calibrate_thrust_compensation(
+                baro_error, thrust_data, hover_start, hover_end)
+            if calib and "best_K" in calib:
+                print(f"  Identified gain K  = {calib['best_K']:.3f} m/unit")
+                print(f"  Time constant tau  = {calib['best_tau']:.3f} s")
+                print(f"  Model R²           = {calib['best_r2']:.3f}")
+                print(f"\n  Recommended parameters:")
+                print(f"    EKF2_PCOEF_THR  = {calib['recommended_pcoef_thr']:+.2f}")
+                print(f"    EKF2_PCOEF_TTAU = {calib['recommended_pcoef_thr_tau']:.2f}")
+            else:
+                print("  Calibration failed: insufficient data or variation")
+        else:
+            print("\nWARNING: --calibrate requires range sensor + thrust data")
+
     # Generate plots
     print("\nGenerating plots...")
     figures = [render_guide_page(params)]  # page 1: guide + params
@@ -1131,6 +1431,9 @@ def main():
         figures.append(plot_ekf_innovation(
             innov_data, gnd_effect, phases, hover_start, hover_end))
 
+    if calib and "best_K" in calib:
+        figures.append(plot_calibration(calib, hover_start, hover_end))
+
     if "raw_time_s" in baro_data:
         figures.append(plot_raw_pressure(
             baro_data, phases, hover_start, hover_end))
@@ -1146,7 +1449,7 @@ def main():
     # Generate and save text summary
     summary = generate_summary(phases, params, baro_error, corr,
                                 press_trends, innov_data, gnd_effect,
-                                hover_start, hover_end)
+                                hover_start, hover_end, calib=calib)
     summary_path = os.path.join(output_dir, "baro_summary.txt")
     with open(summary_path, "w") as f:
         f.write(summary)
