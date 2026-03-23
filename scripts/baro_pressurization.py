@@ -268,18 +268,102 @@ def extract_baro_innovation(ulog):
     }
 
 
-def extract_gnd_effect_status(ulog):
-    """Check if EKF ground effect flag is active."""
+def extract_fusion_status(ulog):
+    """Extract EKF fusion status flags — which sources are actually active."""
     start_us = ulog.start_timestamp
     esf = get_topic(ulog, "estimator_status_flags")
-    if esf is None or "cs_gnd_effect" not in esf.data:
+    if esf is None:
         return {}
-    return {
+
+    result = {
         "time_s": timestamps_to_seconds(esf.data["timestamp"], start_us),
-        "cs_gnd_effect": esf.data["cs_gnd_effect"],
-        "cs_baro_hgt": esf.data.get("cs_baro_hgt"),
-        "cs_rng_hgt": esf.data.get("cs_rng_hgt"),
     }
+
+    # Height sources
+    for key in ("cs_baro_hgt", "cs_rng_hgt", "cs_gps_hgt", "cs_ev_hgt",
+                "cs_fake_hgt"):
+        if key in esf.data:
+            result[key] = esf.data[key]
+
+    # Position / velocity sources
+    for key in ("cs_gnss_pos", "cs_gnss_vel", "cs_ev_pos", "cs_ev_vel",
+                "cs_opt_flow", "cs_fake_pos"):
+        if key in esf.data:
+            result[key] = esf.data[key]
+
+    # Other relevant flags
+    for key in ("cs_gnd_effect", "cs_in_air", "cs_fixed_wing",
+                "cs_baro_fault", "cs_rng_fault", "cs_gnss_fault",
+                "cs_inertial_dead_reckoning"):
+        if key in esf.data:
+            result[key] = esf.data[key]
+
+    return result
+
+
+def summarize_fusion_sources(fusion_status, phases):
+    """Summarize which fusion sources were active during flight.
+
+    Returns a dict mapping source names to their activity percentage
+    during the armed/hover period, and a one-line human-readable summary.
+    """
+    if not fusion_status or "time_s" not in fusion_status:
+        return {"sources": {}, "summary": "No estimator_status_flags data"}
+
+    t = fusion_status["time_s"]
+    t0 = phases.get("armed_start_s", t[0])
+    t1 = phases.get("armed_end_s", t[-1])
+    armed = (t >= t0) & (t <= t1)
+
+    if armed.sum() == 0:
+        return {"sources": {}, "summary": "No armed data"}
+
+    height_flags = [
+        ("cs_baro_hgt", "Baro"),
+        ("cs_gps_hgt", "GNSS"),
+        ("cs_rng_hgt", "Range"),
+        ("cs_ev_hgt", "ExtVision"),
+        ("cs_fake_hgt", "Fake"),
+    ]
+
+    pos_flags = [
+        ("cs_gnss_pos", "GNSS pos"),
+        ("cs_gnss_vel", "GNSS vel"),
+        ("cs_ev_pos", "EV pos"),
+        ("cs_ev_vel", "EV vel"),
+        ("cs_opt_flow", "OptFlow"),
+        ("cs_fake_pos", "Fake pos"),
+    ]
+
+    sources = {}
+    active_hgt = []
+    active_pos = []
+
+    for key, label in height_flags:
+        if key in fusion_status:
+            pct = float(np.mean(fusion_status[key][armed].astype(bool)) * 100)
+            sources[label + " hgt"] = pct
+            if pct > 50:
+                active_hgt.append(label)
+
+    for key, label in pos_flags:
+        if key in fusion_status:
+            pct = float(np.mean(fusion_status[key][armed].astype(bool)) * 100)
+            sources[label] = pct
+            if pct > 50:
+                active_pos.append(label)
+
+    hgt_str = ", ".join(active_hgt) if active_hgt else "NONE"
+    pos_str = ", ".join(active_pos) if active_pos else "NONE"
+    summary = f"Height: [{hgt_str}]  Position: [{pos_str}]"
+
+    return {"sources": sources, "summary": summary,
+            "active_hgt": active_hgt, "active_pos": active_pos}
+
+
+def extract_gnd_effect_status(ulog):
+    """Check if EKF ground effect flag is active (legacy wrapper)."""
+    return extract_fusion_status(ulog)
 
 
 # ---------------------------------------------------------------------------
@@ -1002,7 +1086,7 @@ _GUIDE_TEXT = [
 _HGT_REF_LABELS = {0: "Barometer", 1: "GNSS", 2: "Range sensor", 3: "Vision"}
 
 
-def render_guide_page(params):
+def render_guide_page(params, fusion_summary=None):
     """Render guide + baro/height params as page 1 of the report."""
     fig = plt.figure(figsize=(14, 9))
     fig.patch.set_facecolor("#fafafa")
@@ -1031,10 +1115,36 @@ def render_guide_page(params):
                  linespacing=1.5, color="#444444")
         y -= 0.025 + 0.02 * (body.count("\n") + 1) + 0.03
 
-    # Right: parameters
-    fig.text(0.55, 0.91, "Height / Baro Parameters",
+    # Right: fusion sources + parameters
+    fig.text(0.55, 0.91, "Active Fusion Sources",
              fontsize=13, fontweight="bold", va="top",
              family="sans-serif", color="#333333")
+
+    y_right = 0.87
+    if fusion_summary and fusion_summary.get("summary"):
+        fig.text(0.56, y_right, fusion_summary["summary"],
+                 fontsize=9.5, va="top", family="monospace",
+                 fontweight="bold",
+                 color="#c62828" if len(fusion_summary.get("active_hgt", [])) <= 1
+                 else "#2e7d32")
+        y_right -= 0.025
+        if fusion_summary.get("sources"):
+            for src, pct in sorted(fusion_summary["sources"].items()):
+                marker = "*" if pct > 50 else " "
+                fig.text(0.58, y_right, f"{marker} {src}: {pct:.0f}%",
+                         fontsize=8, va="top", family="monospace",
+                         color="#333333" if pct > 50 else "#999999")
+                y_right -= 0.018
+        y_right -= 0.01
+    else:
+        fig.text(0.56, y_right, "(no estimator_status_flags data)",
+                 fontsize=9, va="top", family="monospace", color="#999999")
+        y_right -= 0.03
+
+    fig.text(0.55, y_right, "Height / Baro Parameters",
+             fontsize=13, fontweight="bold", va="top",
+             family="sans-serif", color="#333333")
+    y_right -= 0.04
 
     param_groups = [
         ("Height Reference", [
@@ -1058,23 +1168,22 @@ def render_guide_page(params):
         ]),
     ]
 
-    y = 0.86
     for group_name, param_list in param_groups:
-        fig.text(0.56, y, group_name,
+        fig.text(0.56, y_right, group_name,
                  fontsize=10, fontweight="bold", va="top",
                  family="sans-serif", color="#555555")
-        y -= 0.03
+        y_right -= 0.03
         for pname, labels in param_list:
             val = params.get(pname, "N/A")
             extra = ""
             if labels and val != "N/A":
                 extra = f"  ({labels.get(int(val), '?')})"
-            fig.text(0.58, y, pname, fontsize=8.5, va="top",
+            fig.text(0.58, y_right, pname, fontsize=8.5, va="top",
                      family="monospace", color="#444444")
-            fig.text(0.82, y, f"{val}{extra}", fontsize=8.5, va="top",
+            fig.text(0.82, y_right, f"{val}{extra}", fontsize=8.5, va="top",
                      family="monospace", color="#111111", fontweight="bold")
-            y -= 0.022
-        y -= 0.015
+            y_right -= 0.022
+        y_right -= 0.015
 
     fig.text(0.5, 0.02, "Generated by baro_pressurization.py",
              fontsize=8, ha="center", color="#999999", family="sans-serif")
@@ -1088,7 +1197,7 @@ def render_guide_page(params):
 
 def generate_summary(phases, params, baro_error, corr, press_trends,
                      innov_data, gnd_effect, hover_start, hover_end,
-                     calib=None):
+                     calib=None, fusion_summary=None):
     """Generate text summary of findings."""
     lines = []
     lines.append("=" * 70)
@@ -1098,6 +1207,19 @@ def generate_summary(phases, params, baro_error, corr, press_trends,
     dur = phases["armed_end_s"] - phases["armed_start_s"]
     lines.append(f"\nFlight duration:  {dur:.1f} s")
     lines.append(f"Hover window:     {hover_start:.1f}s - {hover_end:.1f}s")
+
+    # Active fusion sources
+    if fusion_summary and fusion_summary.get("summary"):
+        lines.append(f"\nACTIVE FUSION SOURCES (from estimator_status_flags)")
+        lines.append(f"  >>> {fusion_summary['summary']} <<<")
+        if fusion_summary.get("sources"):
+            for src, pct in sorted(fusion_summary["sources"].items()):
+                marker = "*" if pct > 50 else " "
+                lines.append(f"    {marker} {src:20s} {pct:5.1f}%")
+        active_hgt = fusion_summary.get("active_hgt", [])
+        if len(active_hgt) == 1 and active_hgt[0] == "Baro":
+            lines.append(f"\n  WARNING: Baro is the ONLY height source. "
+                          "Bias estimator is unobservable.")
 
     # Parameters
     lines.append("\nHEIGHT / BARO PARAMETERS")
@@ -1351,19 +1473,38 @@ def main():
     ekf_data = extract_ekf_position(ulog)
     thrust_data = extract_thrust(ulog)
     innov_data = extract_baro_innovation(ulog)
-    gnd_effect = extract_gnd_effect_status(ulog)
+    fusion_status = extract_fusion_status(ulog)
+    gnd_effect = fusion_status  # backward compat — same data
 
     has_range = bool(range_data)
     has_baro = "baro_time_s" in baro_data
 
+    # Determine which fusion sources are actually active (not just configured)
+    fusion_summary = summarize_fusion_sources(fusion_status, phases)
+
+    print(f"\n  ACTIVE FUSION SOURCES (from estimator_status_flags):")
+    print(f"  >>> {fusion_summary['summary']} <<<")
+    if fusion_summary.get("sources"):
+        for src, pct in sorted(fusion_summary["sources"].items()):
+            marker = "*" if pct > 50 else " "
+            print(f"    {marker} {src:20s} {pct:5.1f}% of armed time")
+
+    hgt_ref_actual = fusion_summary.get("active_hgt", [])
+    hgt_ref_param = hgt_ref_map.get(hgt_ref, "Unknown")
+    if hgt_ref_param == "GNSS" and "GNSS" not in hgt_ref_actual:
+        print(f"\n  NOTE: EKF2_HGT_REF={hgt_ref} requests GNSS but GNSS height "
+              f"is NOT being fused. Actual height: {hgt_ref_actual or ['NONE']}")
+    if hgt_ref_param == "Range sensor" and "Range" not in hgt_ref_actual:
+        print(f"\n  NOTE: EKF2_HGT_REF={hgt_ref} requests Range but Range height "
+              f"is NOT being fused. Actual height: {hgt_ref_actual or ['NONE']}")
+
     # Vertical velocity (EKF Vz if range fused, else range derivative)
     vz_data = extract_vertical_velocity(ekf_data, range_data, gnd_effect)
 
-    print(f"  Baro data: {'yes' if has_baro else 'NO'}")
+    print(f"\n  Baro data: {'yes' if has_baro else 'NO'}")
     print(f"  Range sensor: {'yes' if has_range else 'NO'}")
     print(f"  Thrust data: {'yes' if thrust_data else 'NO'}")
     print(f"  Baro innovation: {'yes' if innov_data else 'NO'}")
-    print(f"  Ground effect flags: {'yes' if gnd_effect else 'NO'}")
     if vz_data:
         print(f"  Vertical velocity: {vz_data['source']}")
 
@@ -1412,7 +1553,7 @@ def main():
 
     # Generate plots
     print("\nGenerating plots...")
-    figures = [render_guide_page(params)]  # page 1: guide + params
+    figures = [render_guide_page(params, fusion_summary)]  # page 1
 
     if baro_error:
         figures.append(plot_altitude_compare(
@@ -1449,7 +1590,8 @@ def main():
     # Generate and save text summary
     summary = generate_summary(phases, params, baro_error, corr,
                                 press_trends, innov_data, gnd_effect,
-                                hover_start, hover_end, calib=calib)
+                                hover_start, hover_end, calib=calib,
+                                fusion_summary=fusion_summary)
     summary_path = os.path.join(output_dir, "baro_summary.txt")
     with open(summary_path, "w") as f:
         f.write(summary)
