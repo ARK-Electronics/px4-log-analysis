@@ -1,0 +1,165 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<root>
+ <tabbed_widget parent="main_window" name="Main Window">
+  <Tab containers="1" tab_name="alt comparison">
+   <Container>
+    <DockSplitter sizes="0.65;0.35" orientation="-" count="2">
+     <DockArea name="...">
+      <plot flip_x="false" style="Lines" flip_y="false" mode="TimeSeries" line_width="1.0">
+       <range/>
+       <limitY/>
+       <curve name="baro_alt_zeroed" color="#d62728"/>
+       <curve name="distance_sensor/current_distance" color="#2ca02c"/>
+       <curve name="vehicle_local_position/z" color="#1f77b4">
+        <transform name="Scale/Offset" alias="EKF fused alt">
+         <options value_offset="0.0" value_scale="-1.0" time_offset="0.0"/>
+        </transform>
+       </curve>
+      </plot>
+     </DockArea>
+     <DockArea name="...">
+      <plot flip_x="false" style="Lines" flip_y="false" mode="TimeSeries" line_width="1.0">
+       <range/>
+       <limitY/>
+       <curve name="estimator_aid_src_baro_hgt/innovation" color="#1f77b4"/>
+       <curve name="zero_line" color="#e08080"/>
+      </plot>
+     </DockArea>
+    </DockSplitter>
+   </Container>
+  </Tab>
+  <Tab containers="1" tab_name="pressurization">
+   <Container>
+    <DockSplitter sizes="0.30;0.25;0.25;0.20" orientation="-" count="4">
+     <DockArea name="...">
+      <plot flip_x="false" style="Lines" flip_y="false" mode="TimeSeries" line_width="1.0">
+       <range/>
+       <limitY/>
+       <curve name="baro_alt_zeroed" color="#d62728"/>
+       <curve name="distance_sensor/current_distance" color="#2ca02c"/>
+      </plot>
+     </DockArea>
+     <DockSplitter sizes="0.5;0.5" orientation="|" count="2">
+      <DockArea name="...">
+       <plot flip_x="false" style="Lines" flip_y="false" mode="TimeSeries" line_width="1.0">
+        <range/>
+        <limitY/>
+        <curve name="thrust_magnitude" color="#ff7f0e"/>
+       </plot>
+      </DockArea>
+      <DockArea name="...">
+       <plot flip_x="false" style="Lines" flip_y="false" mode="TimeSeries" line_width="1.0">
+        <range/>
+        <limitY/>
+        <curve name="sensor_baro/pressure" color="#9467bd"/>
+       </plot>
+      </DockArea>
+     </DockSplitter>
+     <DockArea name="...">
+      <plot flip_x="false" style="Lines" flip_y="false" mode="TimeSeries" line_width="1.0">
+       <range/>
+       <limitY/>
+       <curve name="estimator_aid_src_baro_hgt/innovation" color="#1f77b4"/>
+       <curve name="zero_line" color="#e08080"/>
+      </plot>
+     </DockArea>
+     <DockArea name="...">
+      <plot flip_x="false" style="Lines" flip_y="false" mode="TimeSeries" line_width="1.0">
+       <range/>
+       <limitY/>
+       <curve name="battery_status/voltage_v" color="#2ca02c"/>
+      </plot>
+     </DockArea>
+    </DockSplitter>
+   </Container>
+  </Tab>
+  <Tab containers="1" tab_name="ekf innov">
+   <Container>
+    <DockSplitter sizes="0.4;0.3;0.3" orientation="-" count="3">
+     <DockArea name="...">
+      <plot flip_x="false" style="Lines" flip_y="false" mode="TimeSeries" line_width="1.0">
+       <range/>
+       <limitY/>
+       <curve name="estimator_aid_src_baro_hgt/innovation" color="#1f77b4"/>
+       <curve name="zero_line" color="#e08080"/>
+      </plot>
+     </DockArea>
+     <DockArea name="...">
+      <plot flip_x="false" style="Lines" flip_y="false" mode="TimeSeries" line_width="1.0">
+       <range/>
+       <limitY/>
+       <curve name="estimator_aid_src_baro_hgt/test_ratio" color="#ff7f0e"/>
+      </plot>
+     </DockArea>
+     <DockArea name="...">
+      <plot flip_x="false" style="Lines" flip_y="false" mode="TimeSeries" line_width="1.0">
+       <range/>
+       <limitY/>
+       <curve name="estimator_status_flags/cs_gnd_effect" color="#d62728"/>
+       <curve name="estimator_status_flags/cs_baro_hgt" color="#17becf"/>
+       <curve name="estimator_status_flags/cs_rng_hgt" color="#2ca02c"/>
+      </plot>
+     </DockArea>
+    </DockSplitter>
+   </Container>
+  </Tab>
+  <Tab containers="1" tab_name="voltage">
+   <Container>
+    <DockSplitter sizes="1" orientation="-" count="1">
+     <DockArea name="...">
+      <plot flip_x="false" style="Lines" flip_y="false" mode="TimeSeries" line_width="1.0">
+       <range/>
+       <limitY/>
+       <curve name="battery_status/voltage_v" color="#1f77b4"/>
+      </plot>
+     </DockArea>
+    </DockSplitter>
+   </Container>
+  </Tab>
+  <currentTabIndex index="0"/>
+ </tabbed_widget>
+ <use_relative_time_offset enabled="1"/>
+ <!-- - - - - - - - - - - - - - - -->
+ <!-- - - - - - - - - - - - - - - -->
+ <Plugins>
+  <plugin ID="DataLoad CSV">
+   <parameters delimiter="0" time_axis=""/>
+  </plugin>
+  <plugin ID="DataLoad MCAP"/>
+  <plugin ID="DataLoad ULog"/>
+  <plugin ID="UDP Server"/>
+  <plugin ID="WebSocket Server"/>
+  <plugin ID="ZMQ Subscriber"/>
+  <plugin ID="Fast Fourier Transform"/>
+  <plugin ID="Quaternion to RPY"/>
+  <plugin ID="Reactive Script Editor">
+   <library code=""/>
+   <scripts/>
+  </plugin>
+  <plugin ID="CSV Exporter"/>
+ </Plugins>
+ <!-- - - - - - - - - - - - - - - -->
+ <!-- - - - - - - - - - - - - - - -->
+ <customMathEquations>
+  <snippet name="thrust_magnitude">
+   <global></global>
+   <function>return -value</function>
+   <linked_source>vehicle_thrust_setpoint/xyz.02</linked_source>
+  </snippet>
+  <snippet name="baro_alt_zeroed">
+   <global>first_val = nil</global>
+   <function>if first_val == nil then
+  first_val = value
+end
+return value - first_val</function>
+   <linked_source>vehicle_air_data/baro_alt_meter</linked_source>
+  </snippet>
+  <snippet name="zero_line">
+   <global></global>
+   <function>return 0</function>
+   <linked_source>estimator_aid_src_baro_hgt/innovation</linked_source>
+  </snippet>
+ </customMathEquations>
+ <snippets/>
+ <!-- - - - - - - - - - - - - - - -->
+</root>
