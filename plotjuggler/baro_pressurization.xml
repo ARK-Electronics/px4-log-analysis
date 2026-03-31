@@ -3,43 +3,53 @@
  <tabbed_widget parent="main_window" name="Main Window">
   <Tab containers="1" tab_name="alt comparison">
    <Container>
-    <DockSplitter sizes="0.333696;0.332609;0.333696" orientation="-" count="3">
+    <DockSplitter sizes="1;0;0;0" orientation="-" count="4">
      <DockArea name="...">
       <plot flip_x="false" style="LinesAndDots" flip_y="false" mode="TimeSeries" line_width="1.0">
-       <range left="0.000000" top="2.198838" bottom="-11.150334" right="47.808093"/>
+       <range left="0.332279" top="2.279112" bottom="-10.386952" right="81.736319"/>
        <limitY/>
-       <curve name="baro_alt_zeroed" color="#d62728"/>
-       <curve name="distance_sensor/current_distance" color="#2ca02c"/>
-       <curve name="vehicle_local_position/z" color="#1f77b4">
+       <curve name="distance_sensor/current_distance" color="#1800ff"/>
+       <curve name="vehicle_local_position/z" color="#13ff00">
         <transform name="Scale/Offset" alias="EKF fused alt">
          <options value_offset="0.0" value_scale="-1.0" time_offset="0.0"/>
         </transform>
        </curve>
+       <curve name="estimator_aid_src_baro_hgt/observation" color="#0090b1">
+        <transform name="Scale/Offset" alias="estimator_aid_src_baro_hgt/observation[Scale/Offset]">
+         <options value_offset="0" value_scale="-1" time_offset="0.0"/>
+        </transform>
+       </curve>
       </plot>
      </DockArea>
-     <DockSplitter sizes="0.5;0.5" orientation="|" count="2">
+     <DockArea name="...">
+      <plot flip_x="false" flip_y="false" mode="TimeSeries" line_width="1.0">
+       <range left="0.332279" top="0.012644" bottom="-0.518390" right="81.736319"/>
+       <limitY/>
+       <curve name="vehicle_thrust_setpoint/xyz.02" color="#ff7f0e"/>
+      </plot>
+     </DockArea>
+     <DockSplitter sizes="nan;nan" orientation="|" count="2">
       <DockArea name="...">
        <plot flip_x="false" style="LinesAndDots" flip_y="false" mode="TimeSeries" line_width="1.0">
-        <range left="0.000000" top="1.025000" bottom="-0.025000" right="47.808093"/>
+        <range left="0.332279" top="0.100000" bottom="-0.100000" right="81.736319"/>
         <limitY/>
         <curve name="estimator_status_flags/cs_gnd_effect" color="#1ac938"/>
         <curve name="vehicle_land_detected/in_ground_effect" color="#9467bd"/>
        </plot>
       </DockArea>
       <DockArea name="...">
-       <plot flip_x="false" flip_y="false" mode="TimeSeries" line_width="1.0">
-        <range left="0.000000" top="-1.738223" bottom="-2.301997" right="47.808093"/>
+       <plot flip_x="false" style="LinesAndDots" flip_y="false" mode="TimeSeries" line_width="1.0">
+        <range left="0.332279" top="1.100000" bottom="0.900000" right="81.736319"/>
         <limitY/>
-        <curve name="estimator_baro_bias/bias" color="#bcbd22"/>
+        <curve name="estimator_aid_src_baro_hgt/observation_variance" color="#d62728"/>
        </plot>
       </DockArea>
      </DockSplitter>
      <DockArea name="...">
-      <plot flip_x="false" flip_y="false" mode="TimeSeries" line_width="1.0">
-       <range left="0.000000" top="1.663452" bottom="-8.701591" right="47.808093"/>
+      <plot flip_x="false" style="LinesAndDots" flip_y="false" mode="TimeSeries" line_width="1.0">
+       <range left="0.332279" top="2.650801" bottom="-9.663390" right="81.736319"/>
        <limitY/>
        <curve name="estimator_aid_src_baro_hgt/innovation" color="#1f77b4"/>
-       <curve name="zero_line" color="#e08080"/>
       </plot>
      </DockArea>
     </DockSplitter>
@@ -47,25 +57,24 @@
   </Tab>
   <Tab containers="1" tab_name="ekf innov">
    <Container>
-    <DockSplitter sizes="0.4;0.3;0.3" orientation="-" count="3">
+    <DockSplitter sizes="0.399775;0.300676;0.29955" orientation="-" count="3">
      <DockArea name="...">
       <plot flip_x="false" style="LinesAndDots" flip_y="false" mode="TimeSeries" line_width="1.0">
-       <range left="0.000000" top="1.663452" bottom="-8.701591" right="47.808093"/>
+       <range left="0.332279" top="2.650801" bottom="-9.663390" right="81.736319"/>
        <limitY/>
        <curve name="estimator_aid_src_baro_hgt/innovation" color="#1f77b4"/>
-       <curve name="zero_line" color="#e08080"/>
       </plot>
      </DockArea>
      <DockArea name="...">
       <plot flip_x="false" style="LinesAndDots" flip_y="false" mode="TimeSeries" line_width="1.0">
-       <range left="0.000000" top="0.103485" bottom="-0.002524" right="47.808093"/>
+       <range left="0.332279" top="3.476945" bottom="-0.084803" right="81.736319"/>
        <limitY/>
        <curve name="estimator_aid_src_baro_hgt/test_ratio" color="#ff7f0e"/>
       </plot>
      </DockArea>
      <DockArea name="...">
       <plot flip_x="false" flip_y="false" mode="TimeSeries" line_width="1.0">
-       <range left="0.000000" top="1.025000" bottom="-0.025000" right="47.808093"/>
+       <range left="0.332279" top="1.025000" bottom="-0.025000" right="81.736319"/>
        <limitY/>
        <curve name="estimator_status_flags/cs_gnd_effect" color="#d62728"/>
        <curve name="estimator_status_flags/cs_baro_hgt" color="#17becf"/>
@@ -80,7 +89,7 @@
     <DockSplitter sizes="1" orientation="-" count="1">
      <DockArea name="...">
       <plot flip_x="false" flip_y="false" mode="TimeSeries" line_width="1.0">
-       <range left="0.000000" top="16.303315" bottom="14.566999" right="47.808093"/>
+       <range left="0.332279" top="15.261511" bottom="12.864584" right="81.736319"/>
        <limitY/>
        <curve name="battery_status/voltage_v" color="#1f77b4"/>
       </plot>
@@ -88,7 +97,113 @@
     </DockSplitter>
    </Container>
   </Tab>
-  <currentTabIndex index="0"/>
+  <Tab containers="1" tab_name="hover thrust">
+   <Container>
+    <DockSplitter sizes="0.333333;0.333333;0.333333" orientation="-" count="3">
+     <DockArea name="...">
+      <plot flip_x="false" style="LinesAndDots" flip_y="false" mode="TimeSeries" line_width="1.0">
+       <range left="0.332279" top="0.012644" bottom="-0.518390" right="81.736319"/>
+       <limitY/>
+       <curve name="vehicle_thrust_setpoint/xyz.02" color="#e91616"/>
+      </plot>
+     </DockArea>
+     <DockArea name="...">
+      <plot flip_x="false" style="LinesAndDots" flip_y="false" mode="TimeSeries" line_width="1.0">
+       <range left="0.332279" top="39.950874" bottom="27.424933" right="81.736319"/>
+       <limitY/>
+       <curve name="vehicle_air_data/baro_alt_meter" color="#30e4d9"/>
+      </plot>
+     </DockArea>
+     <DockArea name="...">
+      <plot flip_x="false" style="LinesAndDots" flip_y="false" mode="TimeSeries" line_width="1.0">
+       <range left="0.332279" top="100934.452930" bottom="100712.976758" right="81.736319"/>
+       <limitY/>
+       <curve name="sensor_baro/pressure" color="#1f77b4"/>
+      </plot>
+     </DockArea>
+    </DockSplitter>
+   </Container>
+  </Tab>
+  <Tab containers="1" tab_name="baro thrust estimate">
+   <Container>
+    <DockSplitter sizes="0.234234;0.432432;0.333333" orientation="-" count="3">
+     <DockSplitter sizes="0.5;0.5" orientation="|" count="2">
+      <DockArea name="...">
+       <plot flip_x="false" flip_y="false" mode="TimeSeries" line_width="1.0">
+        <range left="0.332279" top="1.100000" bottom="0.900000" right="81.736319"/>
+        <limitY/>
+        <curve name="baro_thrust_estimate/estimation_active" color="#9467bd"/>
+       </plot>
+      </DockArea>
+      <DockArea name="...">
+       <plot flip_x="false" flip_y="false" mode="TimeSeries" line_width="1.0">
+        <range left="0.332279" top="1.025000" bottom="-0.025000" right="81.736319"/>
+        <limitY/>
+        <curve name="baro_thrust_estimate/converged" color="#17becf"/>
+       </plot>
+      </DockArea>
+     </DockSplitter>
+     <DockSplitter sizes="0.5;0.5" orientation="|" count="2">
+      <DockArea name="...">
+       <plot flip_x="false" flip_y="false" mode="TimeSeries" line_width="1.0">
+        <range left="0.332279" top="0.012644" bottom="-0.518390" right="81.736319"/>
+        <limitY/>
+        <curve name="vehicle_thrust_setpoint/xyz.02" color="#f14cc1"/>
+       </plot>
+      </DockArea>
+      <DockArea name="...">
+       <plot flip_x="false" flip_y="false" mode="TimeSeries" line_width="1.0">
+        <range left="0.332279" top="39.950874" bottom="27.424933" right="81.736319"/>
+        <limitY/>
+        <curve name="vehicle_air_data/baro_alt_meter" color="#d62728"/>
+       </plot>
+      </DockArea>
+     </DockSplitter>
+     <DockSplitter sizes="0.5;0.5" orientation="|" count="2">
+      <DockArea name="...">
+       <plot flip_x="false" style="LinesAndDots" flip_y="false" mode="TimeSeries" line_width="1.0">
+        <range left="0.332279" top="33.576512" bottom="-11.684424" right="81.736319"/>
+        <limitY/>
+        <curve name="baro_thrust_estimate/k_estimate" color="#1ac938"/>
+       </plot>
+      </DockArea>
+      <DockArea name="...">
+       <plot flip_x="false" flip_y="false" mode="TimeSeries" line_width="1.0">
+        <range left="0.332279" top="102.143678" bottom="-2.022596" right="81.736319"/>
+        <limitY/>
+        <curve name="baro_thrust_estimate/k_estimate_var" color="#bcbd22"/>
+       </plot>
+      </DockArea>
+     </DockSplitter>
+    </DockSplitter>
+   </Container>
+  </Tab>
+  <Tab containers="1" tab_name="baro and dist">
+   <Container>
+    <DockSplitter sizes="0.500562;0.499438" orientation="-" count="2">
+     <DockArea name="...">
+      <plot flip_x="false" style="LinesAndDots" flip_y="false" mode="TimeSeries" line_width="1.0">
+       <range left="0.332279" top="2.950874" bottom="-9.575067" right="81.736319"/>
+       <limitY/>
+       <curve name="vehicle_air_data/baro_alt_meter" color="#ff0017">
+        <transform name="Scale/Offset" alias="vehicle_air_data/baro_alt_meter[Scale/Offset]">
+         <options value_offset="-37" value_scale="1" time_offset="0.0"/>
+        </transform>
+       </curve>
+       <curve name="distance_sensor/current_distance" color="#2741d6"/>
+      </plot>
+     </DockArea>
+     <DockArea name="...">
+      <plot flip_x="false" flip_y="false" mode="TimeSeries" line_width="1.0">
+       <range left="0.332279" top="2.026978" bottom="-0.049438" right="81.736319"/>
+       <limitY/>
+       <curve name="distance_sensor/current_distance" color="#1ac938"/>
+      </plot>
+     </DockArea>
+    </DockSplitter>
+   </Container>
+  </Tab>
+  <currentTabIndex index="5"/>
  </tabbed_widget>
  <use_relative_time_offset enabled="1"/>
  <!-- - - - - - - - - - - - - - - -->
@@ -112,26 +227,7 @@
  </Plugins>
  <!-- - - - - - - - - - - - - - - -->
  <!-- - - - - - - - - - - - - - - -->
- <customMathEquations>
-  <snippet name="thrust_magnitude">
-   <global></global>
-   <function>return -value</function>
-   <linked_source>vehicle_thrust_setpoint/xyz.02</linked_source>
-  </snippet>
-  <snippet name="baro_alt_zeroed">
-   <global>first_val = nil</global>
-   <function>if first_val == nil then
-  first_val = value
-end
-return value - first_val</function>
-   <linked_source>vehicle_air_data/baro_alt_meter</linked_source>
-  </snippet>
-  <snippet name="zero_line">
-   <global></global>
-   <function>return 0</function>
-   <linked_source>estimator_aid_src_baro_hgt/innovation</linked_source>
-  </snippet>
- </customMathEquations>
+ <customMathEquations/>
  <snippets/>
  <!-- - - - - - - - - - - - - - - -->
 </root>
