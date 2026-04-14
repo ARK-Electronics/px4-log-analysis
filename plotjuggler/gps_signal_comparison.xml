@@ -1,0 +1,295 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<root>
+ <tabbed_widget name="Main Window" parent="main_window">
+  <Tab tab_name="sats and fix" containers="1">
+   <Container>
+    <DockSplitter orientation="-" sizes="0.5;0.5" count="2">
+     <DockArea name="satellites_used">
+      <plot mode="TimeSeries" style="LinesAndDots" flip_x="false" flip_y="false" line_width="1.0">
+       <range top="40.0" right="1.0" bottom="0.0" left="0.0"/>
+       <limitY/>
+       <curve name="sensor_gps.00/satellites_used" color="#1f77b4"/>
+      </plot>
+     </DockArea>
+     <DockArea name="fix_type">
+      <plot mode="TimeSeries" style="LinesAndDots" flip_x="false" flip_y="false" line_width="1.0">
+       <range top="6.0" right="1.0" bottom="0.0" left="0.0"/>
+       <limitY/>
+       <curve name="sensor_gps.00/fix_type" color="#2ca02c"/>
+      </plot>
+     </DockArea>
+    </DockSplitter>
+   </Container>
+  </Tab>
+  <Tab tab_name="reported accuracy" containers="1">
+   <Container>
+    <DockSplitter orientation="-" sizes="0.25;0.25;0.25;0.25" count="4">
+     <DockArea name="eph m">
+      <plot mode="TimeSeries" style="LinesAndDots" flip_x="false" flip_y="false" line_width="1.0">
+       <range top="5.0" right="1.0" bottom="0.0" left="0.0"/>
+       <limitY/>
+       <curve name="sensor_gps.00/eph" color="#1f77b4"/>
+      </plot>
+     </DockArea>
+     <DockArea name="epv m">
+      <plot mode="TimeSeries" style="LinesAndDots" flip_x="false" flip_y="false" line_width="1.0">
+       <range top="5.0" right="1.0" bottom="0.0" left="0.0"/>
+       <limitY/>
+       <curve name="sensor_gps.00/epv" color="#ff7f0e"/>
+      </plot>
+     </DockArea>
+     <DockArea name="hdop">
+      <plot mode="TimeSeries" style="LinesAndDots" flip_x="false" flip_y="false" line_width="1.0">
+       <range top="3.0" right="1.0" bottom="0.0" left="0.0"/>
+       <limitY/>
+       <curve name="sensor_gps.00/hdop" color="#9467bd"/>
+      </plot>
+     </DockArea>
+     <DockArea name="vdop">
+      <plot mode="TimeSeries" style="LinesAndDots" flip_x="false" flip_y="false" line_width="1.0">
+       <range top="3.0" right="1.0" bottom="0.0" left="0.0"/>
+       <limitY/>
+       <curve name="sensor_gps.00/vdop" color="#8c564b"/>
+      </plot>
+     </DockArea>
+    </DockSplitter>
+   </Container>
+  </Tab>
+  <Tab tab_name="speed and heading acc" containers="1">
+   <Container>
+    <DockSplitter orientation="-" sizes="0.5;0.5" count="2">
+     <DockArea name="speed variance m per s">
+      <plot mode="TimeSeries" style="LinesAndDots" flip_x="false" flip_y="false" line_width="1.0">
+       <range top="1.0" right="1.0" bottom="0.0" left="0.0"/>
+       <limitY/>
+       <curve name="sensor_gps.00/s_variance_m_s" color="#1f77b4"/>
+      </plot>
+     </DockArea>
+     <DockArea name="course variance rad">
+      <plot mode="TimeSeries" style="LinesAndDots" flip_x="false" flip_y="false" line_width="1.0">
+       <range top="1.0" right="1.0" bottom="0.0" left="0.0"/>
+       <limitY/>
+       <curve name="sensor_gps.00/c_variance_rad" color="#d62728"/>
+      </plot>
+     </DockArea>
+    </DockSplitter>
+   </Container>
+  </Tab>
+  <Tab tab_name="signal health" containers="1">
+   <Container>
+    <DockSplitter orientation="-" sizes="0.333333;0.333333;0.333333" count="3">
+     <DockArea name="noise per ms">
+      <plot mode="TimeSeries" style="LinesAndDots" flip_x="false" flip_y="false" line_width="1.0">
+       <range top="200.0" right="1.0" bottom="0.0" left="0.0"/>
+       <limitY/>
+       <curve name="sensor_gps.00/noise_per_ms" color="#1f77b4"/>
+      </plot>
+     </DockArea>
+     <DockArea name="jamming indicator">
+      <plot mode="TimeSeries" style="LinesAndDots" flip_x="false" flip_y="false" line_width="1.0">
+       <range top="255.0" right="1.0" bottom="0.0" left="0.0"/>
+       <limitY/>
+       <curve name="sensor_gps.00/jamming_indicator" color="#d62728"/>
+      </plot>
+     </DockArea>
+     <DockArea name="AGC">
+      <plot mode="TimeSeries" style="LinesAndDots" flip_x="false" flip_y="false" line_width="1.0">
+       <range top="10000.0" right="1.0" bottom="0.0" left="0.0"/>
+       <limitY/>
+       <curve name="sensor_gps.00/automatic_gain_control" color="#9467bd"/>
+      </plot>
+     </DockArea>
+    </DockSplitter>
+   </Container>
+  </Tab>
+  <Tab tab_name="ekf gnss innovations" containers="1">
+   <Container>
+    <DockSplitter orientation="-" sizes="0.333333;0.333333;0.333333" count="3">
+     <DockSplitter orientation="|" sizes="0.666667;0.333333" count="2">
+      <DockArea name="gnss pos innovation N E m">
+       <plot mode="TimeSeries" flip_x="false" flip_y="false" line_width="1.0">
+        <range top="2.0" right="1.0" bottom="-2.0" left="0.0"/>
+        <limitY/>
+        <curve name="estimator_aid_src_gnss_pos/innovation.00" color="#1f77b4"/>
+        <curve name="estimator_aid_src_gnss_pos/innovation.01" color="#ff7f0e"/>
+       </plot>
+      </DockArea>
+      <DockArea name="gnss pos test ratio">
+       <plot mode="TimeSeries" flip_x="false" flip_y="false" line_width="1.0">
+        <range top="2.0" right="1.0" bottom="0.0" left="0.0"/>
+        <limitY/>
+        <curve name="estimator_aid_src_gnss_pos/test_ratio.00" color="#1f77b4"/>
+        <curve name="estimator_aid_src_gnss_pos/test_ratio.01" color="#ff7f0e"/>
+        <curve name="estimator_aid_src_gnss_pos/innovation_rejected" color="#d62728"/>
+       </plot>
+      </DockArea>
+     </DockSplitter>
+     <DockSplitter orientation="|" sizes="0.666667;0.333333" count="2">
+      <DockArea name="gnss vel innovation N E D m per s">
+       <plot mode="TimeSeries" flip_x="false" flip_y="false" line_width="1.0">
+        <range top="1.0" right="1.0" bottom="-1.0" left="0.0"/>
+        <limitY/>
+        <curve name="estimator_aid_src_gnss_vel/innovation.00" color="#1f77b4"/>
+        <curve name="estimator_aid_src_gnss_vel/innovation.01" color="#ff7f0e"/>
+        <curve name="estimator_aid_src_gnss_vel/innovation.02" color="#2ca02c"/>
+       </plot>
+      </DockArea>
+      <DockArea name="gnss vel test ratio">
+       <plot mode="TimeSeries" flip_x="false" flip_y="false" line_width="1.0">
+        <range top="2.0" right="1.0" bottom="0.0" left="0.0"/>
+        <limitY/>
+        <curve name="estimator_aid_src_gnss_vel/test_ratio.00" color="#1f77b4"/>
+        <curve name="estimator_aid_src_gnss_vel/test_ratio.01" color="#ff7f0e"/>
+        <curve name="estimator_aid_src_gnss_vel/test_ratio.02" color="#2ca02c"/>
+        <curve name="estimator_aid_src_gnss_vel/innovation_rejected" color="#d62728"/>
+       </plot>
+      </DockArea>
+     </DockSplitter>
+     <DockSplitter orientation="|" sizes="0.666667;0.333333" count="2">
+      <DockArea name="gnss hgt innovation m">
+       <plot mode="TimeSeries" flip_x="false" flip_y="false" line_width="1.0">
+        <range top="2.0" right="1.0" bottom="-2.0" left="0.0"/>
+        <limitY/>
+        <curve name="estimator_aid_src_gnss_hgt/innovation" color="#1f77b4"/>
+       </plot>
+      </DockArea>
+      <DockArea name="gnss hgt test ratio">
+       <plot mode="TimeSeries" flip_x="false" flip_y="false" line_width="1.0">
+        <range top="2.0" right="1.0" bottom="0.0" left="0.0"/>
+        <limitY/>
+        <curve name="estimator_aid_src_gnss_hgt/test_ratio" color="#1f77b4"/>
+        <curve name="estimator_aid_src_gnss_hgt/innovation_rejected" color="#d62728"/>
+       </plot>
+      </DockArea>
+     </DockSplitter>
+    </DockSplitter>
+   </Container>
+  </Tab>
+  <Tab tab_name="stationary drift" containers="1">
+   <Container>
+    <DockSplitter orientation="-" sizes="0.333333;0.333333;0.333333" count="3">
+     <DockArea name="horiz drift rate m per s">
+      <plot mode="TimeSeries" style="LinesAndDots" flip_x="false" flip_y="false" line_width="1.0">
+       <range top="0.5" right="1.0" bottom="0.0" left="0.0"/>
+       <limitY/>
+       <curve name="estimator_gps_status/position_drift_rate_horizontal_m_s" color="#1f77b4"/>
+      </plot>
+     </DockArea>
+     <DockArea name="vert drift rate m per s">
+      <plot mode="TimeSeries" style="LinesAndDots" flip_x="false" flip_y="false" line_width="1.0">
+       <range top="0.5" right="1.0" bottom="0.0" left="0.0"/>
+       <limitY/>
+       <curve name="estimator_gps_status/position_drift_rate_vertical_m_s" color="#ff7f0e"/>
+      </plot>
+     </DockArea>
+     <DockArea name="filtered horizontal speed m per s">
+      <plot mode="TimeSeries" style="LinesAndDots" flip_x="false" flip_y="false" line_width="1.0">
+       <range top="1.0" right="1.0" bottom="0.0" left="0.0"/>
+       <limitY/>
+       <curve name="estimator_gps_status/filtered_horizontal_speed_m_s" color="#2ca02c"/>
+      </plot>
+     </DockArea>
+    </DockSplitter>
+   </Container>
+  </Tab>
+  <Tab tab_name="ekf uncertainty" containers="1">
+   <Container>
+    <DockSplitter orientation="-" sizes="0.25;0.25;0.25;0.25" count="4">
+     <DockArea name="EKF eph m">
+      <plot mode="TimeSeries" flip_x="false" flip_y="false" line_width="1.0">
+       <range top="5.0" right="1.0" bottom="0.0" left="0.0"/>
+       <limitY/>
+       <curve name="vehicle_local_position/eph" color="#1f77b4"/>
+      </plot>
+     </DockArea>
+     <DockArea name="EKF epv m">
+      <plot mode="TimeSeries" flip_x="false" flip_y="false" line_width="1.0">
+       <range top="5.0" right="1.0" bottom="0.0" left="0.0"/>
+       <limitY/>
+       <curve name="vehicle_local_position/epv" color="#ff7f0e"/>
+      </plot>
+     </DockArea>
+     <DockArea name="EKF evh m per s">
+      <plot mode="TimeSeries" flip_x="false" flip_y="false" line_width="1.0">
+       <range top="2.0" right="1.0" bottom="0.0" left="0.0"/>
+       <limitY/>
+       <curve name="vehicle_local_position/evh" color="#9467bd"/>
+      </plot>
+     </DockArea>
+     <DockArea name="EKF evv m per s">
+      <plot mode="TimeSeries" flip_x="false" flip_y="false" line_width="1.0">
+       <range top="2.0" right="1.0" bottom="0.0" left="0.0"/>
+       <limitY/>
+       <curve name="vehicle_local_position/evv" color="#8c564b"/>
+      </plot>
+     </DockArea>
+    </DockSplitter>
+   </Container>
+  </Tab>
+  <Tab tab_name="raw position jitter" containers="1">
+   <Container>
+    <DockSplitter orientation="-" sizes="0.333333;0.333333;0.333333" count="3">
+     <DockArea name="d lat dt">
+      <plot mode="TimeSeries" flip_x="false" flip_y="false" line_width="1.0">
+       <range top="0.0001" right="1.0" bottom="-0.0001" left="0.0"/>
+       <limitY/>
+       <curve name="sensor_gps.00/latitude_deg" color="#1f77b4">
+        <transform name="Derivative" alias="sensor_gps.00/latitude_deg[Derivative]">
+         <options lineEdit="1.0" radioChecked="radioActual"/>
+        </transform>
+       </curve>
+      </plot>
+     </DockArea>
+     <DockArea name="d lon dt">
+      <plot mode="TimeSeries" flip_x="false" flip_y="false" line_width="1.0">
+       <range top="0.0001" right="1.0" bottom="-0.0001" left="0.0"/>
+       <limitY/>
+       <curve name="sensor_gps.00/longitude_deg" color="#ff7f0e">
+        <transform name="Derivative" alias="sensor_gps.00/longitude_deg[Derivative]">
+         <options lineEdit="1.0" radioChecked="radioActual"/>
+        </transform>
+       </curve>
+      </plot>
+     </DockArea>
+     <DockArea name="d alt dt m per s">
+      <plot mode="TimeSeries" flip_x="false" flip_y="false" line_width="1.0">
+       <range top="2.0" right="1.0" bottom="-2.0" left="0.0"/>
+       <limitY/>
+       <curve name="sensor_gps.00/altitude_msl_m" color="#2ca02c">
+        <transform name="Derivative" alias="sensor_gps.00/altitude_msl_m[Derivative]">
+         <options lineEdit="1.0" radioChecked="radioActual"/>
+        </transform>
+       </curve>
+      </plot>
+     </DockArea>
+    </DockSplitter>
+   </Container>
+  </Tab>
+  <currentTabIndex index="0"/>
+ </tabbed_widget>
+ <use_relative_time_offset enabled="1"/>
+ <!-- - - - - - - - - - - - - - - -->
+ <!-- - - - - - - - - - - - - - - -->
+ <Plugins>
+  <plugin ID="DataLoad CSV">
+   <parameters delimiter="0" time_axis=""/>
+  </plugin>
+  <plugin ID="DataLoad MCAP"/>
+  <plugin ID="DataLoad ULog"/>
+  <plugin ID="UDP Server"/>
+  <plugin ID="WebSocket Server"/>
+  <plugin ID="ZMQ Subscriber"/>
+  <plugin ID="Fast Fourier Transform"/>
+  <plugin ID="Quaternion to RPY"/>
+  <plugin ID="Reactive Script Editor">
+   <library code=""/>
+   <scripts/>
+  </plugin>
+  <plugin ID="CSV Exporter"/>
+ </Plugins>
+ <!-- - - - - - - - - - - - - - - -->
+ <!-- - - - - - - - - - - - - - - -->
+ <customMathEquations/>
+ <snippets/>
+ <!-- - - - - - - - - - - - - - - -->
+</root>

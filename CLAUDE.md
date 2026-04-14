@@ -15,6 +15,7 @@ Tools for analyzing PX4 ULog flight log files — size profiling, vibration anal
 | `/profile-log <path>` | Run the size profiler on a `.ulg` file and interpret results |
 | `/accel-vibration <path>` | Analyze accel vibration, compute PSDs/spectrograms, identify notch filter targets |
 | `/baro-pressurization <path>` | Analyze baro pressure bias — thrust pressurization, ground effect, thermal drift |
+| `/gps-signal-quality <path-a> [path-b]` | Profile GPS signal quality — sats, fix, accuracy, innovations, stationary drift; compare mode for before/after flights |
 
 ## Directory Layout
 
